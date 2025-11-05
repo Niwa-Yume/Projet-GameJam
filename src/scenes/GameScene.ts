@@ -2,14 +2,15 @@ import Phaser from 'phaser';
 import { createBonfire } from '../entities/Bonfire';
 import { createSkeletonEnemy } from '../entities/Enemies';
 import { attachHealthBar, updateHealthBar } from '../ui/HealthBar';
+import { ensureFlameTexture, ensureSmokeTexture } from '../gfx/CanvasTextures';
 
 type EnemyGO = Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
 
 export class GameScene extends Phaser.Scene {
     // Groupes d'objets
     private towers!: Phaser.GameObjects.Group;
-    private enemies!: Phaser.GameObjects.Group;
-    private bullets!: Phaser.GameObjects.Group;
+    private enemies!: Phaser.Physics.Arcade.Group;  // Groupe physique pour les ennemis
+    private bullets!: Phaser.Physics.Arcade.Group;  // Groupe physique pour les projectiles
     private walls!: Phaser.GameObjects.Group;
     // Nouveau: générateurs
     private generators!: Phaser.GameObjects.Group;
@@ -28,6 +29,11 @@ export class GameScene extends Phaser.Scene {
 
     // Grille et constantes de gameplay
     private static readonly TILE_SIZE = 64;
+    // Zone de jeu (map) avec marges pour l'UI
+    private static readonly GAME_AREA_WIDTH = 800;
+    private static readonly GAME_AREA_HEIGHT = 600;
+    private static readonly UI_MARGIN_LEFT = 250; // Marge gauche pour l'UI
+    private static readonly UI_MARGIN_TOP = 50;   // Marge haute pour l'UI
     private static readonly ENEMY_SPEED = 80;
     private static readonly TOWER_RANGE = 160; // portée en pixels
     private static readonly TOWER_FIRE_RATE = 500; // ms entre deux tirs
@@ -38,12 +44,12 @@ export class GameScene extends Phaser.Scene {
     // Générateur d'éclats
     private static readonly GENERATOR_TICK_MS = 2000; // production toutes les 2s
     private static readonly GENERATOR_YIELD = 2; // éclats produits par tick
+    // Production passive d'âmes (idle)
+    private static readonly PASSIVE_SOUL_RATE = 0.5; // âmes par seconde (base)
     // Auras
     private static readonly CAMPFIRE_RADIUS = 120;
     private static readonly CAMPFIRE_HEAL = 5; // PV par tick
     private static readonly CAMPFIRE_TICK_MS = 1500;
-    private static readonly FORGE_RADIUS = 160;
-    private static readonly FORGE_RATE_MUL = 0.8; // 20% plus rapide
 
     // Prévisualisation de placement
     private previewGhost?: Phaser.GameObjects.Rectangle;
@@ -83,21 +89,59 @@ export class GameScene extends Phaser.Scene {
     private waveSpawnsRemaining: number = 0;
     private waveSpawning: boolean = false; // tant que le timer spawn n'est pas terminé
 
+    // Système de production passive d'âmes
+    private passiveSoulTimer?: Phaser.Time.TimerEvent;
+    private soulProductionRate: number = 0.5; // âmes par seconde
+    private soulProductionMultiplier: number = 1.0; // multiplicateur global
+
     constructor() {
         super('GameScene');
     }
 
-    preload() { /* no-op */ }
+    preload() {
+        // Les GIFs sont maintenant chargés directement en tant qu'éléments HTML dans Bonfire.ts
+    }
 
     create() {
         // Toujours reprendre la physique au démarrage (au cas où la scène précédente était en pause)
         if (this.physics && this.physics.world) {
             this.physics.world.resume();
         }
-        // Déterminer et aligner la position du sanctuaire sur la grille, au centre de l'écran
+
+        // Nettoyer les timers existants
+        if (this.passiveSoulTimer) {
+            this.time.removeEvent(this.passiveSoulTimer);
+            this.passiveSoulTimer = undefined;
+        }
+        if (this.enemyTimer) {
+            this.time.removeEvent(this.enemyTimer);
+            this.enemyTimer = undefined;
+        }
+
+        // Note: scene.restart() gère automatiquement le nettoyage des groupes et objets
+        // Pas besoin de les détruire manuellement
+
+        // === CRÉER LA ZONE DE JEU AVEC BORDURE ===
+        const gameAreaX = GameScene.UI_MARGIN_LEFT;
+        const gameAreaY = GameScene.UI_MARGIN_TOP;
+        const gameAreaW = GameScene.GAME_AREA_WIDTH;
+        const gameAreaH = GameScene.GAME_AREA_HEIGHT;
+
+        // Fond de la zone de jeu
+        this.add.rectangle(gameAreaX, gameAreaY, gameAreaW, gameAreaH, 0x1a1612, 1)
+            .setOrigin(0, 0)
+            .setDepth(-10);
+
+        // Bordure de la zone de jeu
+        const border = this.add.graphics();
+        border.lineStyle(3, 0xd4af37, 0.6);
+        border.strokeRect(gameAreaX, gameAreaY, gameAreaW, gameAreaH);
+        border.setDepth(100);
+
+        // Déterminer et aligner la position du sanctuaire sur la grille, au centre de la ZONE DE JEU
         const TS = GameScene.TILE_SIZE;
-        const centerX = this.scale.width / 2;
-        const centerY = this.scale.height / 2;
+        const centerX = gameAreaX + gameAreaW / 2;
+        const centerY = gameAreaY + gameAreaH / 2;
         const cellX = Math.floor(centerX / TS);
         const cellY = Math.floor(centerY / TS);
         this.sanctuaryPos = { x: cellX * TS + TS / 2, y: cellY * TS + TS / 2 };
@@ -125,21 +169,27 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('barracksCost', this.barracksCost);
         this.registry.set('wallCost', this.wallCost);
         this.registry.set('barracksCount', 0);
-        // États de vague garantis à OFF avant l’UI
+        this.registry.set('forgeCount', 0);
+        // États de vague garantis à OFF avant l'UI
         this.registry.set('waveActive', false);
         this.registry.set('waveTotal', 0);
         this.registry.set('waveRemaining', 0);
-
-        // Sanctuaire modulaire
-        createBonfire(this, this.sanctuaryPos.x, this.sanctuaryPos.y);
+        // Système de production passive d'âmes (idle)
+        if (typeof this.registry.get('soulProductionRate') !== 'number') this.registry.set('soulProductionRate', GameScene.PASSIVE_SOUL_RATE);
+        if (typeof this.registry.get('soulProductionMultiplier') !== 'number') this.registry.set('soulProductionMultiplier', 1.0);
+        this.soulProductionRate = this.registry.get('soulProductionRate') as number;
+        this.soulProductionMultiplier = this.registry.get('soulProductionMultiplier') as number;
 
         // Lancer l’UI après que la registry soit prête
         this.scene.launch('UIScene');
 
-        // Groupes
+        // === CRÉER LE SANCTUAIRE DE FEU (BONFIRE) AU CENTRE ===
+        createBonfire(this, this.sanctuaryPos.x, this.sanctuaryPos.y);
+
+        // Groupes - les groupes physiques pour bullets et enemies
         this.towers = this.add.group();
-        this.enemies = this.add.group();
-        this.bullets = this.add.group();
+        this.bullets = this.physics.add.group();  // Groupe physique pour les projectiles
+        this.enemies = this.physics.add.group();  // Groupe physique pour les ennemis
         this.walls = this.add.group();
         this.generators = this.add.group();
         this.campfires = this.add.group();
@@ -147,6 +197,18 @@ export class GameScene extends Phaser.Scene {
         this.storages = this.add.group();
         this.allies = this.add.group();
         this.barracks = this.add.group();
+
+        // Overlap projectiles-ennemis
+        this.physics.add.overlap(
+            this.bullets,
+            this.enemies,
+            (bulletObj, enemyObj) => this.onBulletHitEnemy(bulletObj, enemyObj),
+            undefined,
+            this
+        );
+
+        // Démarrer la production passive d'âmes (idle game)
+        this.startPassiveSoulProduction();
 
         // Nettoyage au shutdown (retire le timer s'il existe)
         this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -187,12 +249,6 @@ export class GameScene extends Phaser.Scene {
         this.input.on('pointermove', this.updatePlacementPreview, this);
         this.input.on('gameout', () => { this.previewGhost?.setVisible(false); this.previewRangeGfx?.setVisible(false); });
 
-        // Overlap projectiles-ennemis
-        this.physics.add.overlap(
-            this.bullets as unknown as Phaser.Types.Physics.Arcade.ArcadeColliderType,
-            this.enemies as unknown as Phaser.Types.Physics.Arcade.ArcadeColliderType,
-            (bulletObj, enemyObj) => this.onBulletHitEnemy(bulletObj, enemyObj)
-        );
 
         // Écouter le changement du type de construction via registry (UI)
         this.registry.events.on('changedata-buildKind', (_p: any, value: 'tower' | 'wall' | 'generator' | 'campfire' | 'forge' | 'storage' | 'barracks') => {
@@ -247,25 +303,156 @@ export class GameScene extends Phaser.Scene {
 
     // Crée une tour et son cercle de portée au survol
     private createTower(x: number, y: number): void {
-        const tower = this.add.rectangle(x, y, 48, 48, 0x394246).setDepth(10).setStrokeStyle(1, 0x3e372d, 0.5);
+        // Container pour tous les éléments visuels de la tour
+        const towerContainer = this.add.container(x, y).setDepth(10);
+
+        // === DESIGN DARK SOULS DARK FANTASY ===
+
+        // Ombre au sol (ellipse douce)
+        const shadow = this.add.graphics();
+        shadow.fillStyle(0x000000, 0.25);
+        shadow.fillEllipse(0, 24, 54, 12);
+        towerContainer.add(shadow);
+
+        // Base en pierre sombre (fondation)
+        const base = this.add.graphics();
+        base.fillStyle(0x2a2520, 1);
+        base.fillRect(-26, 18, 52, 8);
+        base.lineStyle(1, 0x1a1510, 0.8);
+        base.strokeRect(-26, 18, 52, 8);
+        towerContainer.add(base);
+
+        // Corps principal de la tour (pierre gothique sombre)
+        const body = this.add.graphics();
+        body.fillStyle(0x3a3530, 1);
+        body.fillRect(-20, -18, 40, 36);
+        // Texture de pierres
+        body.lineStyle(1, 0x2a2520, 0.6);
+        body.strokeRect(-20, -6, 40, 1);
+        body.strokeRect(-20, 6, 40, 1);
+        body.strokeRect(-10, -18, 1, 36);
+        body.strokeRect(10, -18, 1, 36);
+        // Bordure extérieure
+        body.lineStyle(2, 0x1a1510, 0.9);
+        body.strokeRect(-20, -18, 40, 36);
+        towerContainer.add(body);
+
+        // Fissures (cracks) pour un effet usé
+        const cracks = this.add.graphics();
+        cracks.lineStyle(1, 0x2a2724, 0.7);
+        const drawCrack = (sx: number, sy: number, pts: [number, number][]) => {
+            cracks.beginPath(); cracks.moveTo(sx, sy); for (const [dx, dy] of pts) cracks.lineTo(sx + dx, sy + dy); cracks.strokePath();
+        };
+        drawCrack(-12, -10, [[-2, 4],[3, 6],[0, 10]]);
+        drawCrack(8, -2, [[-4, 4],[2, 8]]);
+        drawCrack(0, 4, [[-3, 3],[5, 10]]);
+        towerContainer.add(cracks);
+
+        // Mousse/lichen à la base
+        const moss = this.add.graphics();
+        moss.fillStyle(0x3d5a3d, 0.9);
+        moss.fillEllipse(-14, 15, 10, 6);
+        moss.fillEllipse(0, 16, 16, 7);
+        moss.fillEllipse(12, 15, 10, 6);
+        moss.lineStyle(1, 0x2c402c, 0.8); moss.strokeEllipse(0, 16, 16, 7);
+        towerContainer.add(moss);
+
+        // Créneaux gothiques au sommet
+        const battlements = this.add.graphics();
+        battlements.fillStyle(0x2a2520, 1);
+        // Créneaux pointus (style gothique)
+        for (let i = 0; i < 5; i++) {
+            const bx = -18 + i * 9;
+            if (i % 2 === 0) {
+                // Créneau haut (pointe)
+                battlements.fillTriangle(bx, -18, bx + 4, -27, bx + 8, -18);
+            }
+        }
+        battlements.lineStyle(1, 0x1a1510, 0.8);
+        battlements.strokeRect(-20, -20, 40, 2);
+        towerContainer.add(battlements);
+
+        // Fenêtre/meurtrière centrale (fente sombre)
+        const window = this.add.graphics();
+        window.fillStyle(0x0a0a08, 1);
+        window.fillRect(-3, -8, 6, 12);
+        window.lineStyle(1, 0x4a4540, 0.7);
+        window.strokeRect(-3, -8, 6, 12);
+        towerContainer.add(window);
+
+        // Lueur mystique dans la meurtrière (idle)
+        const glow = this.add.graphics();
+        glow.fillStyle(0x6b8fa5, 0.35);
+        glow.fillRect(-2, -6, 4, 8);
+        glow.setBlendMode(Phaser.BlendModes.ADD);
+        towerContainer.add(glow);
+        this.tweens.add({ targets: glow, alpha: { from: 0.35, to: 0.65 }, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+        // Torches latérales (flammes + fumée)
+        const flameKey = ensureFlameTexture(this);
+        const smokeKey = ensureSmokeTexture(this);
+        const torchLeft = this.add.particles(0, 0, flameKey, {
+            x: -16, y: -10, lifespan: { min: 300, max: 700 }, scale: { start: 0.18, end: 0 }, alpha: { start: 0.9, end: 0 }, speedY: { min: -20, max: -50 }, speedX: { min: -8, max: 8 }, quantity: 1, frequency: 80, blendMode: 'ADD'
+        });
+        const torchRight = this.add.particles(0, 0, flameKey, {
+            x: 16, y: -10, lifespan: { min: 300, max: 700 }, scale: { start: 0.18, end: 0 }, alpha: { start: 0.9, end: 0 }, speedY: { min: -20, max: -50 }, speedX: { min: -8, max: 8 }, quantity: 1, frequency: 80, blendMode: 'ADD'
+        });
+        const smokeLeft = this.add.particles(0, 0, smokeKey, {
+            x: -16, y: -16, lifespan: { min: 600, max: 1200 }, scale: { start: 0.5, end: 1.0 }, alpha: { start: 0.3, end: 0 }, speedY: { min: -8, max: -16 }, speedX: { min: -4, max: 4 }, quantity: 1, frequency: 140
+        });
+        const smokeRight = this.add.particles(0, 0, smokeKey, {
+            x: 16, y: -16, lifespan: { min: 600, max: 1200 }, scale: { start: 0.5, end: 1.0 }, alpha: { start: 0.3, end: 0 }, speedY: { min: -8, max: -16 }, speedX: { min: -4, max: 4 }, quantity: 1, frequency: 140
+        });
+        towerContainer.add([torchLeft, torchRight, smokeLeft, smokeRight]);
+
+        // Bannière (apparaitra aux upgrades élevés)
+        const banner = this.add.graphics();
+        banner.setVisible(false);
+        towerContainer.addAt(banner, 1); // derrière corps/fenêtre
+
+        // Rectangle invisible pour les interactions (hitbox)
+        const tower = this.add.rectangle(0, 0, 48, 48, 0x000000, 0).setDepth(10);
+        towerContainer.add(tower);
+
+        // Données de la tour
         tower.setData('nextFire', 0);
         tower.setData('hp', 100);
         tower.setData('maxHp', 100);
+        tower.setData('upgradeLevel', 0);
         tower.setData('fireRateMul', 1);
+        tower.setData('damageMul', 1);
+        tower.setData('container', towerContainer);
+        tower.setData('glow', glow);
+        tower.setData('banner', banner);
+        tower.setData('torches', [torchLeft, torchRight, smokeLeft, smokeRight]);
+        // IMPORTANT: Stocker les coordonnées absolues de la tour (du container)
+        tower.setData('worldX', x);
+        tower.setData('worldY', y);
+
         this.towers.add(tower);
         attachHealthBar(this, tower);
         tower.setInteractive({ useHandCursor: true });
         const rangeGfx = this.add.graphics().setDepth(9).setVisible(false);
-        const drawRange = () => {
-            rangeGfx.clear();
-            rangeGfx.lineStyle(1, 0x9f8d62, 0.8);
-            rangeGfx.strokeCircle(tower.x, tower.y, GameScene.TOWER_RANGE);
-        };
+        const drawRange = () => { rangeGfx.clear(); rangeGfx.lineStyle(1, 0x6b8fa5, 0.85); rangeGfx.strokeCircle(x, y, GameScene.TOWER_RANGE); };
         const showRange = () => { drawRange(); rangeGfx.setVisible(true); };
         const hideRange = () => { rangeGfx.setVisible(false); };
         tower.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OVER, showRange);
         tower.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OUT, hideRange);
-        tower.once(Phaser.GameObjects.Events.DESTROY, () => { rangeGfx.destroy(); });
+
+        // Clic pour ouvrir le menu d'upgrade
+        tower.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
+            if (pointer.rightButtonDown()) return;
+            this.showUpgradeMenu(tower, 'tower');
+        });
+
+        tower.once(Phaser.GameObjects.Events.DESTROY, () => {
+            rangeGfx.destroy();
+            // Laisser le container détruire ses propres enfants pour éviter les doubles-destructions
+            const container = tower.getData('container') as Phaser.GameObjects.Container | undefined;
+            if (container && container.active) {
+                container.destroy();
+            }
+        });
     }
 
     // Crée un mur (bloquant pour le pathfinding)
@@ -276,7 +463,8 @@ export class GameScene extends Phaser.Scene {
         this.walls.add(wall);
         attachHealthBar(this, wall);
         wall.once(Phaser.GameObjects.Events.DESTROY, () => {
-            if (this.walls.contains(wall)) this.walls.remove(wall, true, true);
+            // Déjà détruit: retirer du groupe sans toucher au display list
+            if (this.walls.contains(wall)) this.walls.remove(wall, false, false);
             this.recomputeGrid();
             this.recomputeAllEnemyPaths();
         });
@@ -290,13 +478,26 @@ export class GameScene extends Phaser.Scene {
         const gen = this.add.rectangle(x, y, 48, 48, 0x7b6a2e).setDepth(9).setStrokeStyle(1, 0x3e372d, 0.5);
         gen.setData('hp', 120);
         gen.setData('maxHp', 120);
+        gen.setData('upgradeLevel', 0); // Niveau d'upgrade (0-3)
+        gen.setData('yieldMul', 1); // Multiplicateur de production
         this.generators.add(gen);
         attachHealthBar(this, gen);
+        gen.setInteractive({ useHandCursor: true });
+
+        const baseYield = GameScene.GENERATOR_YIELD;
         const timer = this.time.addEvent({ delay: GameScene.GENERATOR_TICK_MS, loop: true, callback: () => {
-            this.addShards(GameScene.GENERATOR_YIELD);
+            const mul = (gen.getData('yieldMul') as number) ?? 1;
+            this.addShards(baseYield * mul);
         }});
         gen.setData('genTimer', timer);
-        gen.once(Phaser.GameObjects.Events.DESTROY, () => { timer.remove(false); });
+
+        // Clic pour ouvrir le menu d'upgrade
+        gen.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
+            if (pointer.rightButtonDown()) return;
+            this.showUpgradeMenu(gen, 'generator');
+        });
+
+        gen.once(Phaser.GameObjects.Events.DESTROY, () => { timer.remove(false); this.generators.remove(gen, false, false); });
     }
 
     // Feu de camp (aura de soin)
@@ -319,7 +520,7 @@ export class GameScene extends Phaser.Scene {
         this.tweens.add({ targets: aura, duration: 900, yoyo: true, repeat: -1, onUpdate: (tw) => {
             const v = tw.progress; drawAura(0.12 + 0.08 * (1 - Math.abs(0.5 - v) * 2), 20 + 4 * v);
         }});
-        fire.once(Phaser.GameObjects.Events.DESTROY, () => { aura.destroy(); });
+        fire.once(Phaser.GameObjects.Events.DESTROY, () => { aura.destroy(); this.campfires.remove(fire, false, false); });
 
         const timer = this.time.addEvent({ delay: GameScene.CAMPFIRE_TICK_MS, loop: true, callback: () => {
             const healTargets: Phaser.GameObjects.Rectangle[] = [];
@@ -348,13 +549,19 @@ export class GameScene extends Phaser.Scene {
         fire.once(Phaser.GameObjects.Events.DESTROY, () => { timer.remove(false); });
     }
 
-    // Forge (aura de cadence sur les tours)
+    // Forge (débloque les upgrades de tours et générateurs)
     private createForge(x: number, y: number): void {
         const forge = this.add.rectangle(x, y, 48, 48, 0x3f4457).setDepth(9).setStrokeStyle(1, 0x3e372d, 0.5);
         forge.setData('hp', 120);
         forge.setData('maxHp', 120);
         this.forges.add(forge);
         attachHealthBar(this, forge);
+        // Notifier l'UI qu'une forge existe maintenant
+        this.registry.set('forgeCount', this.forges.getLength());
+        forge.once(Phaser.GameObjects.Events.DESTROY, () => {
+            this.forges.remove(forge, false, false);
+            this.registry.set('forgeCount', this.forges.getLength());
+        });
     }
 
     // Réserve (augmente la capacité max d'éclats)
@@ -370,6 +577,7 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('maxSoulShards', max + inc);
         stor.setData('capInc', inc);
         stor.once(Phaser.GameObjects.Events.DESTROY, () => {
+            this.storages.remove(stor, false, false);
             const curMax = (this.registry.get('maxSoulShards') as number) ?? 100;
             const dec = stor.getData('capInc') as number ?? 0;
             const newMax = Math.max(0, curMax - dec);
@@ -389,7 +597,7 @@ export class GameScene extends Phaser.Scene {
         const count = ((this.registry.get('barracksCount') as number) ?? 0) + 1;
         this.registry.set('barracksCount', count);
         br.once(Phaser.GameObjects.Events.DESTROY, () => {
-            if (this.barracks.contains(br)) this.barracks.remove(br, true, true);
+            this.barracks.remove(br, false, false);
             const c = Math.max(0, ((this.registry.get('barracksCount') as number) ?? 1) - 1);
             this.registry.set('barracksCount', c);
         });
@@ -399,7 +607,7 @@ export class GameScene extends Phaser.Scene {
         // Choisir une cellule de spawn sur le bord gauche non bloquée
         const startCell = this.pickSpawnCell();
         const sx = startCell ? this.cellToWorld(startCell.cx, startCell.cy).x : -16;
-        const sy = startCell ? this.cellToWorld(startCell.cx, startCell.cy).y : Phaser.Math.Between(32, this.scale.height - 32);
+        const sy = startCell ? this.cellToWorld(startCell.cx, startCell.cy).y : Phaser.Math.Between(32, this.game.canvas.height - 32);
         const enemy = this.createSkeletonEnemy(sx, sy);
         this.enemies.add(enemy);
 
@@ -438,18 +646,31 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        // Buff de cadence par les forges
-        this.computeTowerBuffs();
 
         // --- Tours ---
         const now = this.time.now;
         const range = GameScene.TOWER_RANGE;
+        const towersCount = this.towers.getChildren().length;
+        const enemiesCount = this.enemies.getChildren().length;
+
+        // Debug: afficher une fois toutes les 60 frames
+        if (this.game.loop.frame % 60 === 0 && (towersCount > 0 || enemiesCount > 0)) {
+            console.log(`Tours: ${towersCount}, Ennemis: ${enemiesCount}`);
+        }
+
         for (const obj of this.towers.getChildren()) {
             const tower = obj as Phaser.GameObjects.Rectangle;
             const nextFire = (tower.getData('nextFire') as number) ?? 0;
             if (now < nextFire) continue;
-            const target = this.findTarget(tower.x, tower.y, range);
+
+            // Utiliser les coordonnées absolues du container
+            const towerX = (tower.getData('worldX') as number) ?? tower.x;
+            const towerY = (tower.getData('worldY') as number) ?? tower.y;
+
+            const target = this.findTarget(towerX, towerY, range);
             if (!target) continue;
+
+
             this.fireFromTower(tower, target);
             const rateMul = (tower.getData('fireRateMul') as number) ?? 1;
             tower.setData('nextFire', now + GameScene.TOWER_FIRE_RATE * rateMul);
@@ -465,7 +686,8 @@ export class GameScene extends Phaser.Scene {
             const dist = Phaser.Math.Distance.Between(enemy.x, enemy.y, sx, sy);
             if (dist <= threshold) {
                 enemy.destroy();
-                this.enemies.remove(enemy, true, true);
+                // Retirer du groupe sans redétruire
+                this.enemies.remove(enemy as any, true, false);
                 this.decWaveRemaining(1);
                 const current = (this.registry.get('sanctuaryHP') as number) ?? 0;
                 const next = Math.max(0, current - 1);
@@ -512,12 +734,13 @@ export class GameScene extends Phaser.Scene {
         }
 
         // --- Projectiles hors écran ---
-        const w = this.scale.width, h = this.scale.height;
+        const w = this.game.canvas.width, h = this.game.canvas.height;
         for (const obj of this.bullets.getChildren().slice()) {
-            const b = obj as Phaser.GameObjects.Rectangle;
+            const b = obj as Phaser.GameObjects.GameObject & { x: number; y: number };
             if (b.x < -32 || b.y < -32 || b.x > w + 32 || b.y > h + 32) {
-                b.destroy();
-                this.bullets.remove(b, true, true);
+                // Retirer du groupe, puis destroy
+                this.bullets.remove(b as any, true, false);
+                (b as any).destroy?.();
             }
         }
 
@@ -552,14 +775,15 @@ export class GameScene extends Phaser.Scene {
                 this.updateHealthBar(target);
                 if (newHp <= 0) {
                     // Détruire le bâtiment et reprendre la marche
+                    // Retirer des groupes AVANT destroy pour éviter double-destruction
+                    if (this.towers.contains(target)) this.towers.remove(target, true, false);
+                    if (this.walls.contains(target)) this.walls.remove(target, true, false);
+                    if (this.generators.contains(target)) this.generators.remove(target, true, false);
+                    if (this.campfires.contains(target)) this.campfires.remove(target, true, false);
+                    if (this.forges.contains(target)) this.forges.remove(target, true, false);
+                    if (this.storages.contains(target)) this.storages.remove(target, true, false);
+                    if (this.barracks.contains(target)) this.barracks.remove(target, true, false);
                     target.destroy();
-                    if (this.towers.contains(target)) this.towers.remove(target, true, true);
-                    if (this.walls.contains(target)) this.walls.remove(target, true, true);
-                    if (this.generators.contains(target)) this.generators.remove(target, true, true);
-                    if (this.campfires.contains(target)) this.campfires.remove(target, true, true);
-                    if (this.forges.contains(target)) this.forges.remove(target, true, true);
-                    if (this.storages.contains(target)) this.storages.remove(target, true, true);
-                    if (this.barracks.contains(target)) this.barracks.remove(target, true, true);
                     enemy.setData('target', undefined);
                     // Recalculer path car la topologie a changé
                     this.recomputeGrid();
@@ -578,18 +802,6 @@ export class GameScene extends Phaser.Scene {
         }
     }
 
-    private computeTowerBuffs(): void {
-        const towers = this.towers.getChildren() as Phaser.GameObjects.Rectangle[];
-        const forges = this.forges.getChildren() as Phaser.GameObjects.Rectangle[];
-        for (const t of towers) {
-            let mul = 1;
-            for (const f of forges) {
-                const d = Phaser.Math.Distance.Between(t.x, t.y, f.x, f.y);
-                if (d <= GameScene.FORGE_RADIUS) { mul = Math.min(mul, GameScene.FORGE_RATE_MUL); }
-            }
-            t.setData('fireRateMul', mul);
-        }
-    }
 
     private findTarget(x: number, y: number, range: number): EnemyGO | null {
         let best: EnemyGO | null = null;
@@ -603,21 +815,49 @@ export class GameScene extends Phaser.Scene {
     }
 
     private fireFromTower(tower: Phaser.GameObjects.Rectangle, target: EnemyGO): void {
-        const bullet = this.add.rectangle(tower.x, tower.y, 8, 8, 0xc5b37a).setDepth(12);
+        // Flash de la lueur de la tour lors du tir
+        const glow = tower.getData('glow') as Phaser.GameObjects.Graphics | undefined;
+        if (glow) {
+            this.tweens.add({
+                targets: glow,
+                alpha: { from: 1.0, to: 0.3 },
+                duration: 150,
+                ease: 'Quad.Out'
+            });
+        }
+
+        // Récupérer les coordonnées absolues de la tour
+        const towerX = (tower.getData('worldX') as number) ?? tower.x;
+        const towerY = (tower.getData('worldY') as number) ?? tower.y;
+
+        // Projectile Arcade simple (rectangle) pour collisions fiables
+        const bullet = this.add.rectangle(towerX, towerY, 8, 8, 0x8fa9bf).setDepth(12);
+
+        // Ajouter au groupe physique AVANT d'ajouter la physique
+        this.bullets.add(bullet);
+
+        // Ajouter la physique
         this.physics.add.existing(bullet);
         const body = bullet.body as Phaser.Physics.Arcade.Body;
         body.setAllowGravity(false);
-        const dx = target.x - tower.x;
-        const dy = target.y - tower.y;
+
+        const dx = target.x - towerX;
+        const dy = target.y - towerY;
         const len = Math.hypot(dx, dy) || 1;
         const vx = (dx / len) * GameScene.BULLET_SPEED;
         const vy = (dy / len) * GameScene.BULLET_SPEED;
         body.setVelocity(vx, vy);
-        this.bullets.add(bullet);
+
+        // Ajout visuel léger: tween d'alpha
+        this.tweens.add({ targets: bullet, alpha: { from: 1, to: 0.6 }, duration: 200, yoyo: true, repeat: 3 });
     }
 
     private fireAllyProjectile(ally: Phaser.GameObjects.Rectangle, target: EnemyGO): void {
         const bullet = this.add.rectangle(ally.x, ally.y, 6, 6, 0xbfa76a).setDepth(12);
+
+        // Ajouter au groupe physique AVANT d'ajouter la physique
+        this.bullets.add(bullet);
+
         this.physics.add.existing(bullet);
         const body = bullet.body as Phaser.Physics.Arcade.Body;
         body.setAllowGravity(false);
@@ -627,19 +867,19 @@ export class GameScene extends Phaser.Scene {
         const vx = (dx / len) * (GameScene.BULLET_SPEED * 0.9);
         const vy = (dy / len) * (GameScene.BULLET_SPEED * 0.9);
         body.setVelocity(vx, vy);
-        this.bullets.add(bullet);
     }
 
     private onBulletHitEnemy(
         bulletObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile | Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody,
         enemyObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile | Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody
     ): void {
-        const bulletGO = this.extractGO(bulletObj) as Phaser.GameObjects.Rectangle;
-        const enemyGO = this.extractGO(enemyObj) as Phaser.GameObjects.Rectangle;
+        const bulletGO = this.extractGO(bulletObj) as Phaser.GameObjects.GameObject;
+        const enemyGO = this.extractGO(enemyObj) as Phaser.GameObjects.GameObject;
+        // Retirer d'abord des groupes (du display list aussi), puis destroy
+        if (this.bullets.contains(bulletGO as any)) this.bullets.remove(bulletGO as any, true, false);
+        if (this.enemies.contains(enemyGO as any)) this.enemies.remove(enemyGO as any, true, false);
         enemyGO.destroy();
         bulletGO.destroy();
-        this.enemies.remove(enemyGO, true, true);
-        this.bullets.remove(bulletGO, true, true);
         this.addShards(GameScene.SHARD_REWARD);
         this.decWaveRemaining(1);
     }
@@ -789,8 +1029,10 @@ export class GameScene extends Phaser.Scene {
                 } else {
                     if (d <= def.atkRange + 6) {
                         if (now >= ((a.getData('nextAtk') as number) ?? 0)) {
+                            // Tuer l'ennemi au corps-à-corps (allié)
+                            // Retirer proprement du groupe puis détruire
+                            if (this.enemies.contains(target as any)) this.enemies.remove(target as any, true, false);
                             target.destroy();
-                            this.enemies.remove(target, true, true);
                             this.addShards(GameScene.SHARD_REWARD);
                             this.decWaveRemaining(1);
                             a.setData('nextAtk', now + def.atkRateMs);
@@ -820,11 +1062,26 @@ export class GameScene extends Phaser.Scene {
 
     private updatePlacementPreview(pointer: Phaser.Input.Pointer): void {
         if (!this.previewGhost || !this.previewRangeGfx) return;
+
+        const worldX = pointer.worldX;
+        const worldY = pointer.worldY;
+        const gameAreaX = GameScene.UI_MARGIN_LEFT;
+        const gameAreaY = GameScene.UI_MARGIN_TOP;
+        const gameAreaRight = gameAreaX + GameScene.GAME_AREA_WIDTH;
+        const gameAreaBottom = gameAreaY + GameScene.GAME_AREA_HEIGHT;
+
+        // Cacher le preview si hors de la zone de jeu
+        if (worldX < gameAreaX || worldX > gameAreaRight || worldY < gameAreaY || worldY > gameAreaBottom) {
+            this.previewGhost.setVisible(false);
+            this.previewRangeGfx.setVisible(false);
+            return;
+        }
+
         const TS = GameScene.TILE_SIZE;
-        const cellX = Math.floor(pointer.worldX / TS);
-        const cellY = Math.floor(pointer.worldY / TS);
-        const snappedX = cellX * TS + TS / 2;
-        const snappedY = cellY * TS + TS / 2;
+        const cellX = Math.floor((worldX - gameAreaX) / TS);
+        const cellY = Math.floor((worldY - gameAreaY) / TS);
+        const snappedX = gameAreaX + cellX * TS + TS / 2;
+        const snappedY = gameAreaY + cellY * TS + TS / 2;
         const valid = this.canPlaceAt(cellX, cellY);
         this.previewGhost
             .setPosition(snappedX, snappedY)
@@ -841,16 +1098,27 @@ export class GameScene extends Phaser.Scene {
     }
 
     private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-        const TS = GameScene.TILE_SIZE;
         const worldX = pointer.worldX;
         const worldY = pointer.worldY;
-        const cellX = Math.floor(worldX / TS);
-        const cellY = Math.floor(worldY / TS);
-        const cols = Math.floor(this.scale.width / TS);
-        const rows = Math.floor(this.scale.height / TS);
+
+        // Vérifier si le clic est dans la zone de jeu
+        const gameAreaX = GameScene.UI_MARGIN_LEFT;
+        const gameAreaY = GameScene.UI_MARGIN_TOP;
+        const gameAreaRight = gameAreaX + GameScene.GAME_AREA_WIDTH;
+        const gameAreaBottom = gameAreaY + GameScene.GAME_AREA_HEIGHT;
+
+        if (worldX < gameAreaX || worldX > gameAreaRight || worldY < gameAreaY || worldY > gameAreaBottom) {
+            return; // Clic hors de la zone de jeu
+        }
+
+        const TS = GameScene.TILE_SIZE;
+        const cellX = Math.floor((worldX - gameAreaX) / TS);
+        const cellY = Math.floor((worldY - gameAreaY) / TS);
+        const cols = Math.floor(GameScene.GAME_AREA_WIDTH / TS);
+        const rows = Math.floor(GameScene.GAME_AREA_HEIGHT / TS);
         if (cellX < 0 || cellY < 0 || cellX >= cols || cellY >= rows) return;
-        const snappedX = cellX * TS + TS / 2;
-        const snappedY = cellY * TS + TS / 2;
+        const snappedX = gameAreaX + cellX * TS + TS / 2;
+        const snappedY = gameAreaY + cellY * TS + TS / 2;
 
         const cost = this.getCurrentCost();
         const shards = (this.registry.get('soulShards') as number) ?? 0;
@@ -898,11 +1166,11 @@ export class GameScene extends Phaser.Scene {
 
     private canPlaceAt(cellX: number, cellY: number): boolean {
         const TS = GameScene.TILE_SIZE;
-        const cols = Math.floor(this.scale.width / TS);
-        const rows = Math.floor(this.scale.height / TS);
+        const cols = Math.floor(GameScene.GAME_AREA_WIDTH / TS);
+        const rows = Math.floor(GameScene.GAME_AREA_HEIGHT / TS);
         if (cellX < 0 || cellY < 0 || cellX >= cols || cellY >= rows) return false;
-        const snappedX = cellX * TS + TS / 2;
-        const snappedY = cellY * TS + TS / 2;
+        const snappedX = GameScene.UI_MARGIN_LEFT + cellX * TS + TS / 2;
+        const snappedY = GameScene.UI_MARGIN_TOP + cellY * TS + TS / 2;
         if (Math.abs(snappedX - this.sanctuaryPos.x) < 1 && Math.abs(snappedY - this.sanctuaryPos.y) < 1) return false;
         const occupied = (
             this.towers.getChildren() as Phaser.GameObjects.Rectangle[]
@@ -921,8 +1189,8 @@ export class GameScene extends Phaser.Scene {
 
     private isOccupiedCell(cellX: number, cellY: number): boolean {
         const TS = GameScene.TILE_SIZE;
-        const snappedX = cellX * TS + TS / 2;
-        const snappedY = cellY * TS + TS / 2;
+        const snappedX = GameScene.UI_MARGIN_LEFT + cellX * TS + TS / 2;
+        const snappedY = GameScene.UI_MARGIN_TOP + cellY * TS + TS / 2;
         return (
             (this.towers.getChildren() as Phaser.GameObjects.Rectangle[]).some(go => Math.abs(go.x - snappedX) < 1 && Math.abs(go.y - snappedY) < 1) ||
             (this.walls.getChildren() as Phaser.GameObjects.Rectangle[]).some(go => Math.abs(go.x - snappedX) < 1 && Math.abs(go.y - snappedY) < 1) ||
@@ -942,8 +1210,8 @@ export class GameScene extends Phaser.Scene {
     // Init pathfinding grid
     private recomputeGrid(): void {
         const TS = GameScene.TILE_SIZE;
-        this.gridCols = Math.floor(this.scale.width / TS);
-        this.gridRows = Math.floor(this.scale.height / TS);
+        this.gridCols = Math.floor(GameScene.GAME_AREA_WIDTH / TS);
+        this.gridRows = Math.floor(GameScene.GAME_AREA_HEIGHT / TS);
         this.blocked = Array.from({ length: this.gridRows }, () => Array(this.gridCols).fill(false));
         const walls = this.walls.getChildren() as Phaser.GameObjects.Rectangle[];
         for (const w of walls) {
@@ -958,14 +1226,19 @@ export class GameScene extends Phaser.Scene {
 
     private worldToCell(x: number, y: number): { cx: number; cy: number } {
         const TS = GameScene.TILE_SIZE;
-        const cx = Math.floor(x / TS);
-        const cy = Math.floor(y / TS);
+        // Ajuster pour la zone de jeu décalée
+        const cx = Math.floor((x - GameScene.UI_MARGIN_LEFT) / TS);
+        const cy = Math.floor((y - GameScene.UI_MARGIN_TOP) / TS);
         return { cx, cy };
     }
 
     private cellToWorld(cx: number, cy: number): { x: number; y: number } {
         const TS = GameScene.TILE_SIZE;
-        return { x: cx * TS + TS / 2, y: cy * TS + TS / 2 };
+        // Ajuster pour la zone de jeu décalée
+        return {
+            x: GameScene.UI_MARGIN_LEFT + cx * TS + TS / 2,
+            y: GameScene.UI_MARGIN_TOP + cy * TS + TS / 2
+        };
     }
 
     private findPath(start: { cx: number; cy: number }, goal: { cx: number; cy: number }): { cx: number; cy: number }[] | null {
@@ -1007,7 +1280,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     private pickSpawnCell(): { cx: number; cy: number } | null {
-        const cx = 0;
+        const cx = 0; // Bord gauche de la grille (zone de jeu)
         for (let i = 0; i < 10; i++) {
             const cy = Phaser.Math.Between(0, this.gridRows - 1);
             if (!this.blocked[cy][cx]) return { cx, cy };
@@ -1081,5 +1354,176 @@ export class GameScene extends Phaser.Scene {
             this.waveActive = false;
             this.registry.set('waveActive', false);
         }
+    }
+
+    // Système de production passive d'âmes (idle game)
+    private startPassiveSoulProduction(): void {
+        // Production toutes les secondes
+        this.passiveSoulTimer = this.time.addEvent({
+            delay: 1000,
+            loop: true,
+            callback: () => {
+                const rate = this.soulProductionRate;
+                const multiplier = this.soulProductionMultiplier;
+                const production = rate * multiplier;
+                this.addShards(production);
+            },
+            callbackScope: this
+        });
+
+        // Nettoyer le timer au shutdown
+        this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+            if (this.passiveSoulTimer) {
+                this.passiveSoulTimer.remove(false);
+                this.passiveSoulTimer = undefined;
+            }
+        });
+    }
+
+    // Méthode publique pour améliorer le taux de production (idle game upgrade)
+    public upgradeSoulProduction(multiplier: number): void {
+        this.soulProductionMultiplier = multiplier;
+        this.registry.set('soulProductionMultiplier', multiplier);
+    }
+
+    // Méthode publique pour augmenter le taux de base
+    public increaseSoulProductionRate(delta: number): void {
+        this.soulProductionRate += delta;
+        this.registry.set('soulProductionRate', this.soulProductionRate);
+    }
+
+    // Afficher le menu d'upgrade pour une tour ou un générateur
+    private showUpgradeMenu(building: Phaser.GameObjects.Rectangle, type: 'tower' | 'generator'): void {
+        // Notifier l'UI pour afficher le menu d'upgrade
+        this.registry.set('upgradeMenuBuilding', { building, type, x: building.x, y: building.y });
+        this.game.events.emit('showUpgradeMenu', building, type);
+    }
+
+    // Méthode publique pour upgrader un bâtiment
+    public upgradeBuildingLevel(building: Phaser.GameObjects.Rectangle, type: 'tower' | 'generator'): boolean {
+        const forgeCount = (this.registry.get('forgeCount') as number) ?? 0;
+        if (forgeCount <= 0) {
+            this.game.events.emit('notify', 'Construisez une Forge pour débloquer les améliorations', 'error');
+            return false;
+        }
+
+        const currentLevel = (building.getData('upgradeLevel') as number) ?? 0;
+        if (currentLevel >= 3) {
+            this.game.events.emit('notify', 'Niveau maximum atteint', 'info');
+            return false;
+        }
+
+        // Coûts d'upgrade par niveau (exponentiel pour idle game)
+        const upgradeCosts = type === 'tower'
+            ? [30, 60, 120]  // Tour: niveaux 1, 2, 3
+            : [40, 80, 160]; // Générateur: niveaux 1, 2, 3
+
+        const cost = upgradeCosts[currentLevel];
+        const shards = (this.registry.get('soulShards') as number) ?? 0;
+
+        if (shards < cost) {
+            this.game.events.emit('notify', `Pas assez d'Âmes (coût: ${cost})`, 'error');
+            return false;
+        }
+
+        // Déduire le coût
+        this.registry.set('soulShards', shards - cost);
+
+        // Appliquer l'upgrade
+        const newLevel = currentLevel + 1;
+        building.setData('upgradeLevel', newLevel);
+
+        if (type === 'tower') {
+            // Tour: améliore cadence de tir et dégâts
+            const fireRateMul = 1 - (newLevel * 0.15); // -15% par niveau (plus rapide)
+            const damageMul = 1 + (newLevel * 0.5); // +50% dégâts par niveau
+            building.setData('fireRateMul', fireRateMul);
+            building.setData('damageMul', damageMul);
+
+            // Changer la couleur de la lueur mystique pour indiquer le niveau
+            const glow = building.getData('glow') as Phaser.GameObjects.Graphics | undefined;
+            if (glow) {
+                glow.clear();
+                // Couleurs de plus en plus intenses et magiques
+                const glowColors = [
+                    0x6b8fa5, // Niveau 0: Bleu clair
+                    0x5a9fbf, // Niveau 1: Bleu plus vif
+                    0x7aafd0, // Niveau 2: Bleu cyan
+                    0x9fd5ff  // Niveau 3: Cyan brillant
+                ];
+                glow.fillStyle(glowColors[newLevel], 0.5 + newLevel * 0.1);
+                glow.fillRect(-2, -6, 4, 8);
+            }
+
+            // Bannière à partir du niveau 2
+            const container = building.getData('container') as Phaser.GameObjects.Container | undefined;
+            const banner = building.getData('banner') as Phaser.GameObjects.Graphics | undefined;
+            if (container && banner) {
+                if (newLevel >= 2) {
+                    const col = newLevel === 3 ? 0x8c6b2e /* doré sale */ : 0x3a3f5a /* bleu nuit */;
+                    banner.setVisible(true);
+                    banner.clear();
+                    banner.fillStyle(col, 1);
+                    banner.fillRect(-6, -18, 12, 18);
+                    banner.fillTriangle(-6, 0, 0, 6, 6, 0);
+                    banner.lineStyle(1, 0x1a1510, 0.8).strokeRect(-6, -18, 12, 18);
+                } else {
+                    banner.setVisible(false);
+                }
+            }
+
+            this.game.events.emit('notify', `Tour améliorée au niveau ${newLevel}`, 'success');
+        } else {
+            // Générateur: améliore production
+            const yieldMul = 1 + (newLevel * 0.75); // +75% par niveau
+            building.setData('yieldMul', yieldMul);
+
+            // Changer la couleur pour indiquer le niveau
+            const colors = [0x7b6a2e, 0x8f7d3a, 0xa39046, 0xbaa552];
+            building.setFillStyle(colors[newLevel]);
+
+            this.game.events.emit('notify', `Générateur amélioré au niveau ${newLevel}`, 'success');
+        }
+
+        return true;
+    }
+
+    // Obtenir les informations d'upgrade pour l'UI
+    public getUpgradeInfo(building: Phaser.GameObjects.Rectangle, type: 'tower' | 'generator'): {
+        level: number;
+        maxLevel: number;
+        nextCost: number;
+        currentStats: string;
+        nextStats: string;
+    } {
+        const level = (building.getData('upgradeLevel') as number) ?? 0;
+        const maxLevel = 3;
+        const upgradeCosts = type === 'tower' ? [30, 60, 120] : [40, 80, 160];
+        const nextCost = level < maxLevel ? upgradeCosts[level] : 0;
+
+        let currentStats = '';
+        let nextStats = '';
+
+        if (type === 'tower') {
+            const fireRate = (building.getData('fireRateMul') as number) ?? 1;
+            const damage = (building.getData('damageMul') as number) ?? 1;
+            currentStats = `Cadence: ${(fireRate * 100).toFixed(0)}%, Dégâts: x${damage.toFixed(1)}`;
+
+            if (level < maxLevel) {
+                const nextFireRate = 1 - ((level + 1) * 0.15);
+                const nextDamage = 1 + ((level + 1) * 0.5);
+                nextStats = `Cadence: ${(nextFireRate * 100).toFixed(0)}%, Dégâts: x${nextDamage.toFixed(1)}`;
+            }
+        } else {
+            const yieldMul = (building.getData('yieldMul') as number) ?? 1;
+            currentStats = `Production: x${yieldMul.toFixed(2)} (${(GameScene.GENERATOR_YIELD * yieldMul).toFixed(1)} âmes/2s)`;
+
+            if (level < maxLevel) {
+                const nextYield = 1 + ((level + 1) * 0.75);
+                nextStats = `Production: x${nextYield.toFixed(2)} (${(GameScene.GENERATOR_YIELD * nextYield).toFixed(1)} âmes/2s)`;
+            }
+        }
+
+        return { level, maxLevel, nextCost, currentStats, nextStats };
     }
 }

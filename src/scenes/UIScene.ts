@@ -5,20 +5,24 @@ import { GameScene } from './GameScene';
  * UIScene: scène dédiée à l'interface utilisateur (overlay)
  */
 export class UIScene extends Phaser.Scene {
-  // Thème Dark Souls-like (palette plus sobre)
+  // Thème Dark Souls-like (palette améliorée pour la lisibilité)
   private theme = {
-    panelFill: 0x12110f,
-    panelAlpha: 0.88,
-    panelStroke: 0x3e372d,
-    gold: 0x9f8d62,      // doré désaturé
-    goldDim: 0x6f634a,   // doré atténué
-    accent: 0x6d5a3a,    // laiton/brun pour barres
-    text: '#d6ceb1',     // ivoire doux
-    textDim: '#8f8466',  // ivoire atténué
+    panelFill: 0x1a1816,
+    panelAlpha: 0.92,
+    panelStroke: 0x5a4d3a,
+    gold: 0xd4af37,      // doré plus vif
+    goldDim: 0xa88932,   // doré atténué mais visible
+    accent: 0x8b6f47,    // laiton/brun pour barres
+    text: '#f4e8d0',     // ivoire très clair
+    textDim: '#b8a88f',  // ivoire atténué mais lisible
     disabled: 0x4b463e,
-    buttonFill: 0x0f0e0d,
-    buttonFillHover: 0x171411,
-    buttonFillActive: 0x1f1b16
+    buttonFill: 0x2a2520,
+    buttonFillHover: 0x3a3228,
+    buttonFillActive: 0x4a4030,
+    // Nouveaux pour améliorer la lisibilité
+    soulColor: 0x66ccff, // bleu cyan pour les âmes
+    hpColor: 0xff6b6b,   // rouge pour la vie
+    productionColor: 0x7bed9f // vert pour la production
   } as const;
 
   private shardsText!: Phaser.GameObjects.Text;
@@ -71,6 +75,11 @@ export class UIScene extends Phaser.Scene {
 
   // Overlay Pause
   private pauseContainer?: Phaser.GameObjects.Container;
+
+  // Menu d'upgrade
+  private upgradeMenuContainer?: Phaser.GameObjects.Container;
+  private currentUpgradeBuilding?: Phaser.GameObjects.Rectangle;
+  private currentUpgradeType?: 'tower' | 'generator';
 
   // Labels et panneaux
   private waveProgLabel!: Phaser.GameObjects.Text;
@@ -131,73 +140,166 @@ export class UIScene extends Phaser.Scene {
     pm.setScrollFactor(0).setDepth(0);
   }
 
-  private drawSeparator(x: number, y: number, w: number): void {
-    const g = this.add.graphics().setScrollFactor(0).setDepth(0);
-    g.lineStyle(1, this.theme.goldDim, 0.6);
-    g.beginPath(); g.moveTo(x, y); g.lineTo(x + w, y); g.strokePath();
-  }
 
   create(): void {
-    const camW = this.cameras.main.width;
 
     // Constantes layout
     const M = 16;
     const BTN_W = 160, BTN_H = 30, BTN_SP = 10;
+    void [BTN_W, BTN_SP]; // Supprime les avertissements pour BTN_W et BTN_SP inutilisés
 
-    // HUD haut: Âmes à gauche, Vague à droite
+    // === DÉFINIR LES ZONES UI (HORS ZONE DE JEU) ===
+    // Zone de jeu: 250px (gauche) à 1050px (droite), 50px (haut) à 650px (bas)
+    const UI_LEFT_MARGIN = 250;
+    const UI_TOP_MARGIN = 50;
+    const GAME_AREA_WIDTH = 800;
+    const GAME_AREA_HEIGHT = 600;
+    void [UI_TOP_MARGIN, GAME_AREA_HEIGHT]; // Supprime les avertissements pour les variables inutilisées
+
+    // HUD dans la marge gauche
     this.addVignetteEdges();
     this.addAshParticles();
-    this.drawDiamond(M, M + 14, 8, this.theme.gold).setScrollFactor(0);
-    this.shardsText = this.add.text(M + 20, M + 4, this.formatShardsLabel(), this.txtStyle(18)).setScrollFactor(0);
 
-    // Vague à droite
-    const rightBase = camW - M;
-    const waveHeaderY = M + 4;
-    this.waveText = this.add.text(rightBase - 140, waveHeaderY, `Vague: ${(this.registry.get('wave') as number) ?? 1}`, this.txtStyle(14, true)).setOrigin(0, 0).setScrollFactor(0);
+    // === PANNEAU ÂMES (marge gauche) ===
+    const soulPanelX = 10;
+    const soulPanelY = 20;
+    const soulPanelW = 220;
+    const soulPanelH = 70;
 
-    // Bouton Vague sous l'entête
-    this.waveButton = this.createActionButton(rightBase, waveHeaderY + 20, 'Lancer Vague', () => {
+    // Fond du panneau âmes avec bordure
+    this.add.rectangle(soulPanelX, soulPanelY, soulPanelW, soulPanelH, this.theme.panelFill, 0.9)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2, this.theme.soulColor, 0.8)
+      .setScrollFactor(0)
+      .setDepth(0);
+
+    // Icône âme (diamant cyan)
+    this.drawDiamond(soulPanelX + 18, soulPanelY + 25, 10, this.theme.soulColor).setScrollFactor(0).setDepth(1);
+
+    // Texte âmes (plus gros et plus visible)
+    this.shardsText = this.add.text(soulPanelX + 35, soulPanelY + 12, this.formatShardsLabel(), {
+      ...this.txtStyle(20),
+      color: '#66ccff',
+      fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(1);
+
+    // Affichage du taux de production passive (en dessous, vert)
+    const productionRate = (this.registry.get('soulProductionRate') as number) ?? 0.5;
+    const productionMultiplier = (this.registry.get('soulProductionMultiplier') as number) ?? 1.0;
+    const totalProduction = productionRate * productionMultiplier;
+    this.add.text(soulPanelX + 35, soulPanelY + 40, `⚡ +${totalProduction.toFixed(1)} âmes/s`, {
+      ...this.txtStyle(14),
+      color: '#7bed9f',
+      fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(1);
+
+    // === PANNEAU VAGUE (marge droite, au-dessus de la zone de jeu) ===
+    const rightPanelX = UI_LEFT_MARGIN + GAME_AREA_WIDTH + 10;
+    const waveHeaderY = 20;
+
+    // Fond du panneau vague
+    this.add.rectangle(rightPanelX, waveHeaderY, 130, 110, this.theme.panelFill, 0.9)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2, this.theme.gold, 0.8)
+      .setScrollFactor(0)
+      .setDepth(0);
+
+    this.waveText = this.add.text(rightPanelX + 10, waveHeaderY + 10, `Vague: ${(this.registry.get('wave') as number) ?? 1}`, {
+      ...this.txtStyle(14),
+      color: '#ffffff', // Blanc pour meilleure lisibilité
+      fontStyle: 'bold'
+    }).setOrigin(0, 0).setScrollFactor(0).setDepth(1);
+
+    // Bouton Vague sous l'entête (centré dans le panneau de 130px)
+    // createActionButton utilise right-w/2 pour centrer, donc on donne rightPanelX + 130
+    this.waveButton = this.createActionButton(rightPanelX + 130, waveHeaderY + 35, 'Lancer Vague', () => {
       const game = this.scene.get('GameScene') as GameScene;
       if (game && typeof game.startNextWave === 'function') game.startNextWave();
     });
     this.waveButton.setScrollFactor(0);
 
     // Barre de progression de vague sous le bouton
-    this.waveBarW = 280; this.waveBarH = 6;
-    this.waveBarX = rightBase - this.waveBarW - 140; // alignée à la même colonne que waveText
-    this.waveBarY = waveHeaderY + 50;
+    this.waveBarW = 110;
+    this.waveBarH = 6;
+    this.waveBarX = rightPanelX + 10;
+    this.waveBarY = waveHeaderY + 85;
     this.waveProgBg = this.add.graphics().setScrollFactor(0).setDepth(1);
     this.waveProgFill = this.add.graphics().setScrollFactor(0).setDepth(2);
     this.drawWaveProgress(0, 1, false);
     this.waveProgLabel = this.add.text(this.waveBarX + this.waveBarW/2, this.waveBarY + this.waveBarH/2, '—', this.txtStyle(12, true)).setOrigin(0.5).setScrollFactor(0).setDepth(3);
 
-    // Sanctuaire à gauche, sous les âmes
-    const hpHeaderY = M + 28;
-    this.drawHeart(M, hpHeaderY + 8, 8, 0xa33a3a).setScrollFactor(0);
-    this.hpText = this.add.text(M + 20, hpHeaderY, 'Feu-lien', this.txtStyle(16, true)).setScrollFactor(0);
-    this.drawSeparator(M + 20, hpHeaderY + 16, 200);
+    // === PANNEAU FEU-LIEN (sous le panneau âmes, bien espacé) ===
+    const hpPanelX = M + 10;
+    const hpPanelY = soulPanelY + soulPanelH + 15; // 15px d'espace
+    const hpPanelW = 220;
+    const hpPanelH = 65;
 
-    // Barre de PV sous le titre
-    this.hpBarX = M + 20;
-    this.hpBarY = hpHeaderY + 22;
-    this.hpBarW = 260;
-    this.hpBarH = 8;
+    // Fond du panneau HP avec bordure rouge
+    this.add.rectangle(hpPanelX, hpPanelY, hpPanelW, hpPanelH, this.theme.panelFill, 0.9)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2, this.theme.hpColor, 0.8)
+      .setScrollFactor(0)
+      .setDepth(0);
+
+    // Icône coeur (rouge)
+    this.drawHeart(hpPanelX + 18, hpPanelY + 20, 10, this.theme.hpColor).setScrollFactor(0).setDepth(1);
+
+    // Titre Feu-lien
+    this.hpText = this.add.text(hpPanelX + 35, hpPanelY + 10, 'Feu-lien', {
+      ...this.txtStyle(16),
+      color: '#ff6b6b',
+      fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(1);
+
+    // Barre de PV sous le titre (plus visible)
+    this.hpBarX = hpPanelX + 10;
+    this.hpBarY = hpPanelY + 35;
+    this.hpBarW = 160;
+    this.hpBarH = 12;
     this.hpBar = this.add.graphics().setScrollFactor(0).setDepth(1);
     const initialHP = (this.registry.get('sanctuaryHP') as number) ?? 5;
-    this.hpBarLabel = this.add.text(this.hpBarX + this.hpBarW + 8, this.hpBarY + this.hpBarH/2, `${initialHP}/5`, this.txtStyle(12, true)).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2);
+    this.hpBarLabel = this.add.text(this.hpBarX + this.hpBarW + 8, this.hpBarY + this.hpBarH/2, `${initialHP}/5`, {
+      ...this.txtStyle(14),
+      color: '#ff6b6b',
+      fontStyle: 'bold'
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(2);
     this.redrawHPBar(initialHP);
 
-    // Coût courant (sous les âmes)
+    // === PANNEAU COÛT (sous le panneau HP) ===
+    const costPanelY = hpPanelY + hpPanelH + 15;
     const initialBuildCost = (this.registry.get('buildCost') as number) ?? (this.registry.get('towerCost') as number) ?? 25;
-    this.costText = this.add.text(M, this.hpBarY + 18, `Coût actuel: ${initialBuildCost}`, this.txtStyle(14, true)).setScrollFactor(0);
 
-    // Sélecteurs Construction: colonne à gauche, large et espacée
-    const selStartY = this.costText.y + 34; // un peu plus d'espace
-    this.add.text(M, selStartY - 12, 'Construction', this.txtStyle(15, true)).setScrollFactor(0);
-    this.drawSeparator(M, selStartY - 4, 180);
-    let by = selStartY + 6;
+    // Fond du coût
+    this.add.rectangle(M + 10, costPanelY, 220, 35, this.theme.panelFill, 0.85)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, this.theme.gold, 0.6)
+      .setScrollFactor(0)
+      .setDepth(0);
+
+    this.costText = this.add.text(M + 20, costPanelY + 8, `💰 Coût: ${initialBuildCost} âmes`, {
+      ...this.txtStyle(14),
+      color: '#ffffff', // Blanc pour meilleure lisibilité
+      fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(1);
+
+    // === SÉLECTEURS CONSTRUCTION ===
+    const selStartY = costPanelY + 50; // Bien espacé du panneau coût
+
+    // Titre avec fond
+    this.add.rectangle(M + 10, selStartY - 5, 220, 28, this.theme.panelFill, 0.85)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, this.theme.gold, 0.6)
+      .setScrollFactor(0)
+      .setDepth(0);
+
+    this.add.text(M + 20, selStartY, 'CONSTRUCTION', {
+      ...this.txtStyle(15),
+      color: '#ffffff', // Blanc pour meilleure lisibilité
+      fontStyle: 'bold'
+    }).setScrollFactor(0).setDepth(1);
+    let by = selStartY + 35;
     const makeBtn = (label: string, kind: typeof this.currentKind) => {
-      const btn = this.createSelectButton(M, by, label, () => this.selectKind(kind), () => this.tooltipForKind(kind), BTN_W, BTN_H);
+      const btn = this.createSelectButton(M + 10, by, label, () => this.selectKind(kind), () => this.tooltipForKind(kind), 200, BTN_H);
       by += BTN_H + BTN_SP;
       return btn;
     };
@@ -213,14 +315,27 @@ export class UIScene extends Phaser.Scene {
     this.currentKind = initialKind;
     this.updateSelectButtons();
 
-    // Recrutement: colonne à droite, sous la barre de vague
-    const recXRight = rightBase;
-    const recTop = this.waveBarY + 24;
-    this.add.text(recXRight, recTop - 10, 'Recrutement', this.txtStyle(16, true)).setOrigin(1, 1).setScrollFactor(0);
-    this.drawSeparator(recXRight - 200, recTop - 2, 200);
-    this.recruitKnight   = this.createRecruitButton(recXRight, recTop + 6,          `Chevalier (${this.knightCost})`,         () => this.tryRecruit('knight', this.knightCost),   () => 'Chevalier — mêlée, robuste');
-    this.recruitWatcher  = this.createRecruitButton(recXRight, recTop + 6 + 28,     `Veilleur (${this.watcherCost})`,        () => this.tryRecruit('watcher', this.watcherCost), () => 'Veilleur — mêlée, rapide');
-    this.recruitArbalest = this.createRecruitButton(recXRight, recTop + 6 + 56,     `Arbalétrier (${this.arbalestCost})`,     () => this.tryRecruit('arbalest', this.arbalestCost), () => 'Arbalétrier — distance');
+    // === PANNEAU RECRUTEMENT (sous le panneau vague) ===
+    const recTop = waveHeaderY + 130;
+
+    this.add.rectangle(rightPanelX, recTop, 130, 110, this.theme.panelFill, 0.9)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2, this.theme.accent, 0.8)
+      .setScrollFactor(0)
+      .setDepth(0);
+
+    this.add.text(rightPanelX + 10, recTop + 5, 'RECRUTEMENT', {
+      ...this.txtStyle(13),
+      color: '#ffffff', // Blanc pour meilleure lisibilité
+      fontStyle: 'bold'
+    }).setOrigin(0, 0).setScrollFactor(0).setDepth(1);
+
+    // Boutons centrés: panneau commence à rightPanelX, largeur 130px, centre = +65px
+    // Mais createRecruitButton attend le bord droit, donc center + w/2 = rightPanelX + 65 + 55 = rightPanelX + 120
+    const recruitBtnRight = rightPanelX + 120; // Centre du panneau + demi-largeur bouton (110/2=55)
+    this.recruitKnight   = this.createRecruitButton(recruitBtnRight, recTop + 30,  `Chevalier (${this.knightCost})`,     () => this.tryRecruit('knight', this.knightCost),   () => 'Chevalier — mêlée, robuste');
+    this.recruitWatcher  = this.createRecruitButton(recruitBtnRight, recTop + 52,  `Veilleur (${this.watcherCost})`,    () => this.tryRecruit('watcher', this.watcherCost), () => 'Veilleur — mêlée, rapide');
+    this.recruitArbalest = this.createRecruitButton(recruitBtnRight, recTop + 74,  `Arbalétrier (${this.arbalestCost})`, () => this.tryRecruit('arbalest', this.arbalestCost), () => 'Arbalétrier — distance');
 
     // État initial bouton vague
     const initialWaveActive = !!(this.registry.get('waveActive') as boolean);
@@ -234,14 +349,14 @@ export class UIScene extends Phaser.Scene {
     this.registry.events.on('changedata-maxSoulShards', this.onMaxShardsChanged);
 
     this.onHPChanged = (_p: Phaser.Data.DataManager, value: number, previousValue: number) => {
-      this.hpText.setText(`Feu-lien: ${value} PV`);
+      this.hpText.setText('Feu-lien');
       this.redrawHPBar(value);
       if (typeof previousValue === 'number' && value < previousValue) this.flashDamage();
       if (value <= 0 && !this.gameOverShown) { this.gameOverShown = true; this.showGameOverOverlay(); }
     };
     this.registry.events.on('changedata-sanctuaryHP', this.onHPChanged);
 
-    this.onCostChanged = (_p: Phaser.Data.DataManager, value: number) => { this.costText.setText(`Coût: ${value}`); };
+    this.onCostChanged = (_p: Phaser.Data.DataManager, value: number) => { this.costText.setText(`💰 Coût: ${value} âmes`); };
     this.registry.events.on('changedata-buildCost', this.onCostChanged);
 
     this.onWaveChanged = (_p: Phaser.Data.DataManager, value: number) => { this.waveText.setText(`Vague: ${value}`); };
@@ -259,6 +374,11 @@ export class UIScene extends Phaser.Scene {
     // Toasts
     this.game.events.on('notify', (msg: string, kind: 'info' | 'error' | 'success' = 'info') => this.showToast(msg, kind));
 
+    // Menu d'upgrade (clics sur tours/générateurs)
+    this.game.events.on('showUpgradeMenu', (building: Phaser.GameObjects.Rectangle, type: 'tower' | 'generator') => {
+      this.showUpgradeMenuForBuilding(building, type);
+    });
+
     // Nettoyage
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       if (this.onShardsChanged) this.registry.events.off('changedata-soulShards', this.onShardsChanged);
@@ -272,6 +392,7 @@ export class UIScene extends Phaser.Scene {
       this.registry.events.off('changedata-waveRemaining');
       this.registry.events.off('changedata-waveTotal');
       this.game.events.off('notify');
+      this.game.events.off('showUpgradeMenu');
     });
 
     // États init
@@ -323,8 +444,11 @@ export class UIScene extends Phaser.Scene {
       .setStrokeStyle(1, this.theme.goldDim, 0.75)
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
-    const txt = this.add.text(bg.x, bg.y, label, this.txtStyle(14)).setOrigin(0.5).setScrollFactor(0);
-    txt.setShadow(0, 1, '#000', 1, true, true);
+    const txt = this.add.text(bg.x, bg.y, label, {
+      ...this.txtStyle(14),
+      color: '#ffffff' // Blanc pour meilleure lisibilité
+    }).setOrigin(0.5).setScrollFactor(0);
+    txt.setShadow(0, 1, '#000', 2, true, true); // Ombre plus prononcée
     const c = this.add.container(0, 0, [bg, txt]).setScrollFactor(0);
     bg.on('pointerdown', () => { bg.setFillStyle(this.theme.buttonFillActive, 0.96); this.time.delayedCall(100, () => bg.setFillStyle(this.theme.buttonFill, 0.96)); onClick(); });
     bg.on('pointerover', (p: Phaser.Input.Pointer) => { bg.setFillStyle(this.theme.buttonFillHover, 0.96).setStrokeStyle(1, this.theme.gold, 0.85); c.setScale(1.02); if (getTooltip) this.showTooltip(getTooltip(), p.worldX, p.worldY); });
@@ -334,13 +458,13 @@ export class UIScene extends Phaser.Scene {
 
   // Bouton d’action: plus compact (140x30) + trait fin
   private createActionButton(right: number, top: number, label: string, onClick: () => void): Phaser.GameObjects.Container {
-    const w = 140, h = 30;
+    const w = 110, h = 28; // Réduit pour rentrer dans le panneau de 130px
     const x = right - w/2;
     const y = top + h/2;
     const bg = this.add.rectangle(x, y, w, h, this.theme.buttonFill, 0.96)
       .setStrokeStyle(1, this.theme.goldDim, 0.75)
       .setInteractive({ useHandCursor: true });
-    const txt = this.add.text(x, y, label, this.txtStyle(15)).setOrigin(0.5);
+    const txt = this.add.text(x, y, label, this.txtStyle(12)).setOrigin(0.5); // Police plus petite
     const c = this.add.container(0, 0, [bg, txt]);
     bg.on('pointerdown', () => { if (!bg.input || !bg.input.enabled) return; bg.setFillStyle(this.theme.buttonFillActive, 0.96); this.time.delayedCall(100, () => bg.setFillStyle(this.theme.buttonFill, 0.96)); onClick(); });
     bg.on('pointerover', () => { if (bg.input?.enabled) { bg.setFillStyle(this.theme.buttonFillHover, 0.96); c.setScale(1.015); }});
@@ -348,16 +472,16 @@ export class UIScene extends Phaser.Scene {
     return c;
   }
 
-  // Bouton de recrutement: plus compact (200x22) + trait fin
+  // Bouton de recrutement: plus compact (110x18) + trait fin
   private createRecruitButton(right: number, top: number, label: string, onClick: () => void, getTooltip?: () => string): Phaser.GameObjects.Container {
-    const w = 200, h = 22;
+    const w = 110, h = 18;
     const x = right - w/2;
     const y = top;
     const bg = this.add.rectangle(x, y, w, h, this.theme.buttonFill, 0.94)
       .setStrokeStyle(1, this.theme.goldDim, 0.75)
       .setInteractive({ useHandCursor: true })
       .setScrollFactor(0);
-    const txt = this.add.text(x, y, label, this.txtStyle(13)).setOrigin(0.5).setScrollFactor(0);
+    const txt = this.add.text(x, y, label, this.txtStyle(10)).setOrigin(0.5).setScrollFactor(0);
     const c = this.add.container(0, 0, [bg, txt]);
     c.setScrollFactor(0);
     bg.on('pointerdown', () => { if (!bg.input || !bg.input.enabled) return; bg.setFillStyle(this.theme.buttonFillActive, 0.94); this.time.delayedCall(80, () => bg.setFillStyle(this.theme.buttonFill, 0.94)); onClick(); });
@@ -373,7 +497,7 @@ export class UIScene extends Phaser.Scene {
       bg.setFillStyle(active ? this.theme.buttonFillHover : this.theme.buttonFill, 0.96);
       bg.setStrokeStyle(1, active ? this.theme.gold : this.theme.goldDim, active ? 0.85 : 0.75);
       const txt = btn.list[1] as Phaser.GameObjects.Text;
-      txt.setColor(active ? this.theme.text : this.theme.textDim);
+      txt.setColor(active ? '#ffffff' : '#cccccc'); // Blanc vif si actif, gris clair sinon
     };
     style(this.btnTower, this.currentKind === 'tower');
     style(this.btnWall,  this.currentKind === 'wall');
@@ -489,10 +613,14 @@ export class UIScene extends Phaser.Scene {
     this.registry.set('waveTotal', 0);
     this.registry.set('waveRemaining', 0);
 
-    // Redémarrer complètement les scènes
-    this.scene.stop('UIScene');
-    this.scene.stop('GameScene');
-    this.scene.start('GameScene');
+    // Redémarrer GameScene (scene.restart() gère automatiquement le nettoyage)
+    const gameScene = this.scene.get('GameScene');
+    if (gameScene) {
+      // Arrêter UIScene d'abord
+      this.scene.stop('UIScene');
+      // Puis redémarrer GameScene (qui relancera UIScene dans son create())
+      gameScene.scene.restart();
+    }
   }
 
   // Définir le type de construction via l’UI
@@ -563,17 +691,34 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
-  // Barre de PV plus fine
+  // Barre de PV plus visible avec gradient
   private redrawHPBar(hp: number): void {
     const maxHp = 5;
     const x = this.hpBarX, y = this.hpBarY, w = this.hpBarW, h = this.hpBarH;
     this.hpBar.clear();
-    this.hpBar.fillStyle(0x000000, 0.5); this.hpBar.fillRoundedRect(x - 1, y - 1, w + 2, h + 2, 3);
-    this.hpBar.fillStyle(0x2a231c, 1); this.hpBar.fillRoundedRect(x, y, w, h, 2);
+
+    // Fond noir avec bordure
+    this.hpBar.fillStyle(0x000000, 0.7);
+    this.hpBar.fillRoundedRect(x - 2, y - 2, w + 4, h + 4, 4);
+
+    // Fond gris foncé
+    this.hpBar.fillStyle(0x2a2520, 1);
+    this.hpBar.fillRoundedRect(x, y, w, h, 3);
+
+    // Barre de vie avec couleur selon le HP
     const ratio = Phaser.Math.Clamp(hp / maxHp, 0, 1);
-    const color = hp <= 1 ? 0x7a1a1a : this.theme.accent;
-    this.hpBar.fillStyle(color, 0.95); this.hpBar.fillRoundedRect(x, y, w * ratio, h, 2);
-    this.hpBar.lineStyle(1, this.theme.goldDim, 0.6); this.hpBar.strokeRoundedRect(x, y, w, h, 2);
+    let color: number;
+    if (hp <= 1) color = 0xe74c3c; // Rouge vif si critique
+    else if (hp <= 2) color = 0xff6b6b; // Rouge si bas
+    else color = 0x2ecc71; // Vert si bon
+
+    this.hpBar.fillStyle(color, 1);
+    this.hpBar.fillRoundedRect(x, y, w * ratio, h, 3);
+
+    // Bordure dorée
+    this.hpBar.lineStyle(2, this.theme.hpColor, 0.8);
+    this.hpBar.strokeRoundedRect(x, y, w, h, 3);
+
     if (this.hpBarLabel) this.hpBarLabel.setText(`${hp}/${maxHp}`);
   }
 
@@ -587,11 +732,11 @@ export class UIScene extends Phaser.Scene {
     if (this.waveProgLabel) this.waveProgLabel.setText(`${Math.max(0, done)}/${Math.max(0, total)}`);
   }
 
-  // Label “Âmes” (au lieu d'Éclats d'Âme) pour un lien DS plus évident
+  // Label "Âmes" (au lieu d'Éclats d'Âme) pour un lien DS plus évident
   private formatShardsLabel(): string {
     const cur = (this.registry.get('soulShards') as number) ?? 0;
     const max = (this.registry.get('maxSoulShards') as number) ?? 100;
-    return `Âmes: ${cur} / ${max}`;
+    return `${Math.floor(cur)} / ${max}`;
   }
 
   // Effet visuel lors de dégâts au Sanctuaire
@@ -627,5 +772,186 @@ export class UIScene extends Phaser.Scene {
     this.pauseContainer = this.add.container(0, 0, [bg, title, hint]).setDepth(999).setScrollFactor(0);
     const game = this.scene.get('GameScene');
     if (game) this.scene.pause('GameScene');
+  }
+
+  // Afficher le menu d'upgrade pour un bâtiment
+  private showUpgradeMenuForBuilding(building: Phaser.GameObjects.Rectangle, type: 'tower' | 'generator'): void {
+    // Fermer le menu existant s'il y en a un
+    if (this.upgradeMenuContainer) {
+      this.upgradeMenuContainer.destroy(true);
+      this.upgradeMenuContainer = undefined;
+    }
+
+    this.currentUpgradeBuilding = building;
+    this.currentUpgradeType = type;
+
+    const game = this.scene.get('GameScene') as GameScene;
+    if (!game || !game.getUpgradeInfo) return;
+
+    const info = game.getUpgradeInfo(building, type);
+    const forgeCount = (this.registry.get('forgeCount') as number) ?? 0;
+
+    // Position du menu (centré sur la caméra)
+    const camW = this.cameras.main.width;
+    const camH = this.cameras.main.height;
+    const menuW = 320;
+    const menuH = 200;
+    const menuX = camW / 2;
+    const menuY = camH / 2;
+
+    // Fond semi-transparent
+    const overlay = this.add.rectangle(camW / 2, camH / 2, camW, camH, 0x000000, 0.4)
+      .setScrollFactor(0)
+      .setInteractive()
+      .setDepth(500);
+
+    // Panel principal
+    const panelBg = this.add.rectangle(menuX, menuY, menuW, menuH, this.theme.panelFill, 0.95)
+      .setScrollFactor(0)
+      .setStrokeStyle(2, this.theme.gold, 0.8)
+      .setDepth(501);
+
+    // Titre
+    const title = type === 'tower' ? 'Amélioration de Tour' : 'Amélioration de Générateur';
+    const titleTxt = this.add.text(menuX, menuY - menuH/2 + 20, title, this.txtStyle(18))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(502);
+
+    // Niveau actuel
+    const levelTxt = this.add.text(menuX, menuY - menuH/2 + 50, `Niveau: ${info.level}/${info.maxLevel}`, this.txtStyle(14, true))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(502);
+
+    // Stats actuelles
+    const currentStatsTxt = this.add.text(menuX, menuY - 20, info.currentStats, this.txtStyle(12, true))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(502);
+
+    // Flèche vers le bas
+    let upgradeBtn: Phaser.GameObjects.Container | undefined;
+    let nextStatsTxt: Phaser.GameObjects.Text | undefined;
+    let arrowTxt: Phaser.GameObjects.Text | undefined;
+    let cantUpgradeTxt: Phaser.GameObjects.Text | undefined;
+
+    if (forgeCount <= 0) {
+      // Pas de forge = pas d'upgrade possible
+      cantUpgradeTxt = this.add.text(menuX, menuY + 20, '⚠️ Construisez une Forge pour\ndébloquer les améliorations', { ...this.txtStyle(13, true), align: 'center' })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(502);
+    } else if (info.level >= info.maxLevel) {
+      // Niveau max atteint
+      cantUpgradeTxt = this.add.text(menuX, menuY + 20, '✓ Niveau Maximum Atteint', this.txtStyle(14, true))
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(502);
+    } else {
+      // Upgrade possible
+      arrowTxt = this.add.text(menuX, menuY + 5, '↓', this.txtStyle(20))
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(502);
+
+      nextStatsTxt = this.add.text(menuX, menuY + 30, info.nextStats, { ...this.txtStyle(12), color: '#' + this.theme.gold.toString(16).padStart(6, '0') })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(502);
+
+      // Bouton améliorer
+      const btnW = 180, btnH = 36;
+      const btnY = menuY + menuH/2 - 40;
+      const btnBg = this.add.rectangle(menuX, btnY, btnW, btnH, this.theme.buttonFill, 0.95)
+        .setStrokeStyle(1, this.theme.gold, 0.85)
+        .setInteractive({ useHandCursor: true })
+        .setScrollFactor(0)
+        .setDepth(501);
+      const btnTxt = this.add.text(menuX, btnY, `Améliorer (${info.nextCost} âmes)`, this.txtStyle(14))
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(502);
+
+      btnBg.on('pointerdown', () => {
+        btnBg.setFillStyle(this.theme.buttonFillActive, 0.95);
+        this.time.delayedCall(100, () => {
+          btnBg.setFillStyle(this.theme.buttonFill, 0.95);
+          this.tryUpgradeBuilding();
+        });
+      });
+      btnBg.on('pointerover', () => {
+        btnBg.setFillStyle(this.theme.buttonFillHover, 0.95);
+      });
+      btnBg.on('pointerout', () => {
+        btnBg.setFillStyle(this.theme.buttonFill, 0.95);
+      });
+
+      upgradeBtn = this.add.container(0, 0, [btnBg, btnTxt]).setScrollFactor(0).setDepth(501);
+    }
+
+    // Bouton fermer
+    const closeBtnSize = 24;
+    const closeX = menuX + menuW/2 - closeBtnSize;
+    const closeY = menuY - menuH/2 + closeBtnSize;
+    const closeBg = this.add.rectangle(closeX, closeY, closeBtnSize, closeBtnSize, 0x7a1a1a, 0.9)
+      .setStrokeStyle(1, this.theme.goldDim, 0.7)
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0)
+      .setDepth(502);
+    const closeTxt = this.add.text(closeX, closeY, '✕', this.txtStyle(16))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(503);
+
+    const closeMenu = () => {
+      if (this.upgradeMenuContainer) {
+        this.upgradeMenuContainer.destroy(true);
+        this.upgradeMenuContainer = undefined;
+        this.currentUpgradeBuilding = undefined;
+        this.currentUpgradeType = undefined;
+      }
+    };
+
+    closeBg.on('pointerdown', closeMenu);
+    overlay.on('pointerdown', closeMenu);
+    closeBg.on('pointerover', () => closeBg.setFillStyle(0xa12020, 0.95));
+    closeBg.on('pointerout', () => closeBg.setFillStyle(0x7a1a1a, 0.9));
+
+    // Container pour tout le menu
+    const elements: any[] = [overlay, panelBg, titleTxt, levelTxt, currentStatsTxt, closeBg, closeTxt];
+    if (arrowTxt) elements.push(arrowTxt);
+    if (nextStatsTxt) elements.push(nextStatsTxt);
+    if (upgradeBtn) elements.push(upgradeBtn);
+    if (cantUpgradeTxt) elements.push(cantUpgradeTxt);
+
+    this.upgradeMenuContainer = this.add.container(0, 0, elements);
+    this.upgradeMenuContainer.setDepth(500);
+  }
+
+  // Tenter d'upgrader le bâtiment sélectionné
+  private tryUpgradeBuilding(): void {
+    if (!this.currentUpgradeBuilding || !this.currentUpgradeType) return;
+
+    const game = this.scene.get('GameScene') as GameScene;
+    if (!game || !game.upgradeBuildingLevel) return;
+
+    const success = game.upgradeBuildingLevel(this.currentUpgradeBuilding, this.currentUpgradeType);
+
+    if (success) {
+      // Fermer le menu et le rouvrir avec les nouvelles stats
+      const building = this.currentUpgradeBuilding;
+      const type = this.currentUpgradeType;
+
+      if (this.upgradeMenuContainer) {
+        this.upgradeMenuContainer.destroy(true);
+        this.upgradeMenuContainer = undefined;
+      }
+
+      // Petit délai avant de rouvrir
+      this.time.delayedCall(200, () => {
+        this.showUpgradeMenuForBuilding(building, type);
+      });
+    }
   }
 }
