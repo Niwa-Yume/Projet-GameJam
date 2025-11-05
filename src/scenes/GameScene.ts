@@ -88,6 +88,8 @@ export class GameScene extends Phaser.Scene {
     private waveActive: boolean = false;
     private waveSpawnsRemaining: number = 0;
     private waveSpawning: boolean = false; // tant que le timer spawn n'est pas terminé
+    private autoWaveMode: boolean = false; // mode automatique (activé après vague 1)
+    private nextWaveTimer?: Phaser.Time.TimerEvent; // timer pour lancer la vague suivante automatiquement
 
     // Système de production passive d'âmes
     private passiveSoulTimer?: Phaser.Time.TimerEvent;
@@ -116,6 +118,10 @@ export class GameScene extends Phaser.Scene {
         if (this.enemyTimer) {
             this.time.removeEvent(this.enemyTimer);
             this.enemyTimer = undefined;
+        }
+        if (this.nextWaveTimer) {
+            this.time.removeEvent(this.nextWaveTimer);
+            this.nextWaveTimer = undefined;
         }
 
         // Note: scene.restart() gère automatiquement le nettoyage des groupes et objets
@@ -146,19 +152,22 @@ export class GameScene extends Phaser.Scene {
         const cellY = Math.floor(centerY / TS);
         this.sanctuaryPos = { x: cellX * TS + TS / 2, y: cellY * TS + TS / 2 };
 
-        // Réinitialiser explicitement l’état de vague et du spawner avant d’exposer la registry à l’UI
+        // Réinitialiser explicitement l'état de vague et du spawner avant d'exposer la registry à l'UI
         this.enemySpeed = GameScene.ENEMY_SPEED;
         if (this.enemyTimer) { this.time.removeEvent(this.enemyTimer); }
         this.enemyTimer = undefined;
+        if (this.nextWaveTimer) { this.time.removeEvent(this.nextWaveTimer); }
+        this.nextWaveTimer = undefined;
         this.waveActive = false;
         this.waveSpawning = false;
         this.waveSpawnsRemaining = 0;
+        this.autoWaveMode = false; // Commence en mode manuel
 
         // --- Registry init (AVANT l’UI) ---
         if (typeof this.registry.get('soulShards') !== 'number') this.registry.set('soulShards', 100);
         if (typeof this.registry.get('maxSoulShards') !== 'number') this.registry.set('maxSoulShards', 100);
         if (typeof this.registry.get('sanctuaryHP') !== 'number') this.registry.set('sanctuaryHP', 5);
-        if (typeof this.registry.get('wave') !== 'number') this.registry.set('wave', 1);
+        if (typeof this.registry.get('wave') !== 'number') this.registry.set('wave', 0);
         this.registry.set('buildKind', this.currentBuildKind);
         this.registry.set('towerCost', this.towerCost);
         this.registry.set('buildCost', this.getCurrentCost());
@@ -174,6 +183,8 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('waveActive', false);
         this.registry.set('waveTotal', 0);
         this.registry.set('waveRemaining', 0);
+        this.registry.set('autoWaveMode', false); // Mode manuel au départ
+        this.registry.set('nextWaveIn', 0); // Pas de compte à rebours
         // Système de production passive d'âmes (idle)
         if (typeof this.registry.get('soulProductionRate') !== 'number') this.registry.set('soulProductionRate', GameScene.PASSIVE_SOUL_RATE);
         if (typeof this.registry.get('soulProductionMultiplier') !== 'number') this.registry.set('soulProductionMultiplier', 1.0);
@@ -646,17 +657,15 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
+        // Mise à jour du compteur pour la prochaine vague automatique
+        if (this.nextWaveTimer && this.autoWaveMode && !this.waveActive) {
+            const remaining = Math.ceil(this.nextWaveTimer.getRemaining() / 1000);
+            this.registry.set('nextWaveIn', remaining);
+        }
 
         // --- Tours ---
         const now = this.time.now;
         const range = GameScene.TOWER_RANGE;
-        const towersCount = this.towers.getChildren().length;
-        const enemiesCount = this.enemies.getChildren().length;
-
-        // Debug: afficher une fois toutes les 60 frames
-        if (this.game.loop.frame % 60 === 0 && (towersCount > 0 || enemiesCount > 0)) {
-            console.log(`Tours: ${towersCount}, Ennemis: ${enemiesCount}`);
-        }
 
         for (const obj of this.towers.getChildren()) {
             const tower = obj as Phaser.GameObjects.Rectangle;
@@ -670,6 +679,10 @@ export class GameScene extends Phaser.Scene {
             const target = this.findTarget(towerX, towerY, range);
             if (!target) continue;
 
+            // Log de debug : la tour tire
+            if (this.game.loop.frame % 60 === 0) {
+                console.log(`🎯 Tour tire ! Position: (${towerX}, ${towerY}) -> Cible: (${target.x}, ${target.y})`);
+            }
 
             this.fireFromTower(tower, target);
             const rateMul = (tower.getData('fireRateMul') as number) ?? 1;
@@ -795,10 +808,41 @@ export class GameScene extends Phaser.Scene {
         }
 
         // Fin de vague: si plus de spawn prévu et plus aucun ennemi vivant
+        // Debug: afficher l'état toutes les 2 secondes si une vague est active
+        if (this.game.loop.frame % 120 === 0 && this.waveActive) {
+            console.log(`📊 État vague: waveActive=${this.waveActive}, waveSpawning=${this.waveSpawning}, ennemis=${this.enemies.getLength()}`);
+        }
+
         if (this.waveActive && !this.waveSpawning && this.enemies.getLength() === 0) {
+            console.log(`🎉 CONDITIONS DE FIN DE VAGUE REMPLIES !`);
             this.waveActive = false;
-            this.registry.set('waveActive', this.waveActive);
+            this.registry.set('waveActive', false);
             this.registry.set('waveRemaining', 0);
+
+            // Récupérer le numéro de vague actuel
+            const currentWave = (this.registry.get('wave') as number) ?? 0;
+            console.log(`✅ Vague ${currentWave} terminée !`);
+
+            // Activer le mode auto après avoir terminé la PREMIÈRE vague lancée (vague 1)
+            // Comme on incrémente avant de lancer, la première vague est numéro 1
+            if (currentWave >= 1 && !this.autoWaveMode) {
+                this.autoWaveMode = true;
+                this.registry.set('autoWaveMode', true);
+                console.log(`🔄 Mode automatique activé après la vague ${currentWave}!`);
+            }
+
+            // Si mode automatique, lancer la vague suivante après 5 secondes
+            if (this.autoWaveMode) {
+                console.log(`⏱️ Prochaine vague dans 5 secondes...`);
+                this.registry.set('nextWaveIn', 5); // Compteur pour l'UI
+                this.nextWaveTimer = this.time.addEvent({
+                    delay: 5000,
+                    callback: () => {
+                        this.startNextWave();
+                    },
+                    callbackScope: this
+                });
+            }
         }
     }
 
@@ -873,6 +917,7 @@ export class GameScene extends Phaser.Scene {
         bulletObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile | Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody,
         enemyObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile | Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody
     ): void {
+        console.log(`💥 COLLISION DÉTECTÉE ! Projectile touche ennemi`);
         const bulletGO = this.extractGO(bulletObj) as Phaser.GameObjects.GameObject;
         const enemyGO = this.extractGO(enemyObj) as Phaser.GameObjects.GameObject;
         // Retirer d'abord des groupes (du display list aussi), puis destroy
@@ -882,6 +927,7 @@ export class GameScene extends Phaser.Scene {
         bulletGO.destroy();
         this.addShards(GameScene.SHARD_REWARD);
         this.decWaveRemaining(1);
+        console.log(`✅ Ennemi tué ! Ennemis restants: ${this.enemies.getLength()}`);
     }
 
     private extractGO(
@@ -925,9 +971,17 @@ export class GameScene extends Phaser.Scene {
         return undefined;
     }
 
-    // Lancement manuel d'une vague (appelé par l'UI)
+    // Lancement d'une vague (appelé par l'UI ou automatiquement)
     public startNextWave(): void {
         if (this.waveActive) return; // déjà en cours
+
+        // Annuler le timer automatique s'il existe
+        if (this.nextWaveTimer) {
+            this.nextWaveTimer.remove(false);
+            this.nextWaveTimer = undefined;
+        }
+        this.registry.set('nextWaveIn', 0);
+
         this.waveActive = true;
         this.registry.set('waveActive', this.waveActive);
 
@@ -951,6 +1005,19 @@ export class GameScene extends Phaser.Scene {
             callbackScope: this
         });
         this.enemyTimer = timer;
+    }
+
+    // Basculer le mode automatique (appelé par l'UI quand on clique sur le bouton)
+    public toggleAutoWave(): void {
+        this.autoWaveMode = !this.autoWaveMode;
+        this.registry.set('autoWaveMode', this.autoWaveMode);
+
+        // Si on désactive le mode auto, annuler le timer
+        if (!this.autoWaveMode && this.nextWaveTimer) {
+            this.nextWaveTimer.remove(false);
+            this.nextWaveTimer = undefined;
+            this.registry.set('nextWaveIn', 0);
+        }
     }
 
     // API publique pour l’UI: recruter une unité
@@ -1344,16 +1411,15 @@ export class GameScene extends Phaser.Scene {
 
 
     // Décrémente le compteur UI de vague restante (si active)
+    // NOTE: Ce n'est qu'un compteur pour l'UI, il ne termine PAS la vague
+    // La vague se termine uniquement dans update() quand tous les ennemis sont morts
     private decWaveRemaining(delta: number): void {
         const active = !!(this.registry.get('waveActive') as boolean);
         if (!active) return;
         const rem = (this.registry.get('waveRemaining') as number) ?? 0;
         const next = Math.max(0, rem - delta);
         this.registry.set('waveRemaining', next);
-        if (next === 0) {
-            this.waveActive = false;
-            this.registry.set('waveActive', false);
-        }
+        // Ne plus mettre waveActive à false ici !
     }
 
     // Système de production passive d'âmes (idle game)

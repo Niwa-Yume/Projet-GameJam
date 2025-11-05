@@ -204,7 +204,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(0);
 
-    this.waveText = this.add.text(rightPanelX + 10, waveHeaderY + 10, `Vague: ${(this.registry.get('wave') as number) ?? 1}`, {
+    this.waveText = this.add.text(rightPanelX + 10, waveHeaderY + 10, `Vague: ${Math.max(1, (this.registry.get('wave') as number) ?? 1)}`, {
       ...this.txtStyle(14),
       color: '#ffffff', // Blanc pour meilleure lisibilité
       fontStyle: 'bold'
@@ -214,7 +214,19 @@ export class UIScene extends Phaser.Scene {
     // createActionButton utilise right-w/2 pour centrer, donc on donne rightPanelX + 130
     this.waveButton = this.createActionButton(rightPanelX + 130, waveHeaderY + 35, 'Lancer Vague', () => {
       const game = this.scene.get('GameScene') as GameScene;
-      if (game && typeof game.startNextWave === 'function') game.startNextWave();
+      if (!game) return;
+
+      // Vérifier si on est en mode automatique
+      const autoMode = this.registry.get('autoWaveMode') as boolean ?? false;
+      const waveActive = this.registry.get('waveActive') as boolean ?? false;
+
+      if (autoMode && !waveActive) {
+        // En mode auto, le bouton bascule entre auto/manuel
+        if (typeof game.toggleAutoWave === 'function') game.toggleAutoWave();
+      } else if (!waveActive) {
+        // Sinon, lancer la vague suivante manuellement
+        if (typeof game.startNextWave === 'function') game.startNextWave();
+      }
     });
     this.waveButton.setScrollFactor(0);
 
@@ -359,7 +371,7 @@ export class UIScene extends Phaser.Scene {
     this.onCostChanged = (_p: Phaser.Data.DataManager, value: number) => { this.costText.setText(`💰 Coût: ${value} âmes`); };
     this.registry.events.on('changedata-buildCost', this.onCostChanged);
 
-    this.onWaveChanged = (_p: Phaser.Data.DataManager, value: number) => { this.waveText.setText(`Vague: ${value}`); };
+    this.onWaveChanged = (_p: Phaser.Data.DataManager, value: number) => { this.waveText.setText(`Vague: ${Math.max(1, value)}`); };
     this.registry.events.on('changedata-wave', this.onWaveChanged);
 
     this.registry.events.on('changedata-buildKind', (_p: Phaser.Data.DataManager, value: typeof this.currentKind) => { this.currentKind = value; this.updateSelectButtons(); });
@@ -368,6 +380,10 @@ export class UIScene extends Phaser.Scene {
 
     this.registry.events.on('changedata-waveRemaining', () => this.updateWaveProgressBar());
     this.registry.events.on('changedata-waveTotal', () => this.updateWaveProgressBar());
+
+    // Écouteurs pour le mode automatique des vagues
+    this.registry.events.on('changedata-autoWaveMode', () => this.updateWaveButton());
+    this.registry.events.on('changedata-nextWaveIn', () => this.updateWaveButton());
 
     this.registry.events.on('changedata-barracksCount', () => this.updateRecruitUI());
 
@@ -525,6 +541,33 @@ export class UIScene extends Phaser.Scene {
     }
   }
 
+  // Met à jour le bouton de vague selon le mode automatique
+  private updateWaveButton(): void {
+    const autoMode = this.registry.get('autoWaveMode') as boolean ?? false;
+    const waveActive = this.registry.get('waveActive') as boolean ?? false;
+    const nextWaveIn = this.registry.get('nextWaveIn') as number ?? 0;
+    const txt = this.waveButton.list[1] as Phaser.GameObjects.Text;
+
+    console.log(`🔧 updateWaveButton: autoMode=${autoMode}, waveActive=${waveActive}, nextWaveIn=${nextWaveIn}`);
+
+    if (waveActive) {
+      // Vague en cours - bouton désactivé
+      return; // setWaveButtonEnabled gère déjà ce cas
+    } else if (autoMode && nextWaveIn > 0) {
+      // Mode auto avec compteur
+      console.log(`📝 Texte bouton: Auto (${nextWaveIn}s)`);
+      txt.setText(`Auto (${nextWaveIn}s)`);
+    } else if (autoMode) {
+      // Mode auto sans compteur (entre deux vagues)
+      console.log(`📝 Texte bouton: Stopper Auto`);
+      txt.setText('Stopper Auto');
+    } else {
+      // Mode manuel
+      console.log(`📝 Texte bouton: Lancer Vague`);
+      txt.setText('Lancer Vague');
+    }
+  }
+
   private updateRecruitUI(): void {
     const shards = (this.registry.get('soulShards') as number) ?? 0;
     const barracks = (this.registry.get('barracksCount') as number) ?? 0;
@@ -599,7 +642,7 @@ export class UIScene extends Phaser.Scene {
     this.registry.set('soulShards', 100);
     this.registry.set('maxSoulShards', 100);
     this.registry.set('sanctuaryHP', 5);
-    this.registry.set('wave', 1);
+    this.registry.set('wave', 0);
     this.registry.set('buildKind', 'tower');
     this.registry.set('towerCost', 25);
     this.registry.set('buildCost', 25);
