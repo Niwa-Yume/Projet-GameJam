@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GameScene } from './GameScene';
+import { SaveSystem } from '../utils/SaveSystem';
 
 /**
  * UIScene: scène dédiée à l'interface utilisateur (overlay)
@@ -159,6 +160,15 @@ export class UIScene extends Phaser.Scene {
     // HUD dans la marge gauche
     this.addVignetteEdges();
     this.addAshParticles();
+
+    // Vérifier s'il y a des gains hors-ligne à afficher
+    const hasOfflineProgress = this.registry.get('hasOfflineProgress') as boolean ?? false;
+    if (hasOfflineProgress) {
+      // Afficher l'overlay après un court délai
+      this.time.delayedCall(500, () => {
+        this.showOfflineProgressOverlay();
+      });
+    }
 
     // === PANNEAU ÂMES (marge gauche) ===
     const soulPanelX = 10;
@@ -415,8 +425,58 @@ export class UIScene extends Phaser.Scene {
     this.updateRecruitUI();
     this.updateWaveProgressBar();
 
+    // === BOUTON DEBUG: RESET SAUVEGARDE (bas droite) ===
+    const debugBtnW = 120;
+    const debugBtnH = 28;
+    const debugX = this.cameras.main.width - debugBtnW - 10;
+    const debugY = this.cameras.main.height - debugBtnH - 10;
+
+    const debugBg = this.add.rectangle(debugX, debugY, debugBtnW, debugBtnH, 0x7a1a1a, 0.8)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, 0xa12020, 0.9)
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0)
+      .setDepth(1500);
+
+    const debugTxt = this.add.text(debugX + debugBtnW/2, debugY + debugBtnH/2, '🗑️ Reset Save', this.txtStyle(11))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(1501);
+
+    debugBg.on('pointerdown', () => {
+      debugBg.setFillStyle(0xa12020, 0.95);
+      this.time.delayedCall(100, () => {
+        if (confirm('⚠️ Voulez-vous vraiment supprimer la sauvegarde et redémarrer le jeu ?')) {
+          SaveSystem.resetGame();
+        } else {
+          debugBg.setFillStyle(0x7a1a1a, 0.8);
+        }
+      });
+    });
+
+    debugBg.on('pointerover', () => {
+      debugBg.setFillStyle(0xa12020, 0.9);
+      debugTxt.setScale(1.05);
+    });
+
+    debugBg.on('pointerout', () => {
+      debugBg.setFillStyle(0x7a1a1a, 0.8);
+      debugTxt.setScale(1.0);
+    });
+
     // ESC pour Pause
     this.input.keyboard?.on('keydown-ESC', () => this.togglePause());
+
+    // Ctrl/Cmd + Shift + R pour réinitialiser la sauvegarde (debug)
+    this.input.keyboard?.on('keydown-R', (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey) {
+        event.preventDefault();
+        console.log('🔧 Raccourci détecté: Reset sauvegarde');
+        if (confirm('⚠️ Ctrl+Shift+R: Supprimer la sauvegarde et redémarrer ?')) {
+          SaveSystem.resetGame();
+        }
+      }
+    });
   }
 
   // Styles texte plus fins
@@ -996,5 +1056,148 @@ export class UIScene extends Phaser.Scene {
         this.showUpgradeMenuForBuilding(building, type);
       });
     }
+  }
+
+  // Affiche le récapitulatif des gains hors-ligne
+  private showOfflineProgressOverlay(): void {
+    const offlineProgress = this.registry.get('offlineProgress') as any;
+    if (!offlineProgress) return;
+
+    const cam = this.cameras.main;
+    const w = cam.width;
+    const h = cam.height;
+
+    // Fond semi-transparent
+    const bg = this.add.rectangle(w/2, h/2, w, h, 0x000000, 0.7).setScrollFactor(0).setInteractive().setDepth(2000);
+
+    // Panel principal (plus grand si on a des vagues)
+    const hasWaves = offlineProgress.wavesCompleted > 0;
+    const panelH = hasWaves ? 360 : 300;
+    const panelW = 420;
+    const panelBg = this.add.rectangle(w/2, h/2, panelW, panelH, this.theme.panelFill, 0.98)
+      .setScrollFactor(0)
+      .setStrokeStyle(3, this.theme.gold, 0.9)
+      .setDepth(2001);
+
+    // Titre
+    const title = this.add.text(w/2, h/2 - panelH/2 + 30, 'Bon retour, Gardien !', {
+      ...this.txtStyle(24),
+      color: '#d4af37',
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
+
+    // Temps écoulé
+    const timeText = SaveSystem.formatTimeElapsed(offlineProgress.timeElapsedSeconds);
+    const timeLabel = this.add.text(w/2, h/2 - panelH/2 + 70, `⏰ Temps écoulé: ${timeText}`, {
+      ...this.txtStyle(16),
+      color: '#ffffff'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
+
+    // Séparateur
+    const separator1 = this.add.graphics().setScrollFactor(0).setDepth(2002);
+    separator1.lineStyle(2, 0xd4af37, 0.5);
+    separator1.lineBetween(w/2 - 170, h/2 - panelH/2 + 95, w/2 + 170, h/2 - panelH/2 + 95);
+
+    let currentY = h/2 - panelH/2 + 120;
+
+    // Gains d'âmes
+    const soulsLabel = this.add.text(w/2, currentY, '💰 Âmes générées', {
+      ...this.txtStyle(14),
+      color: '#cccccc'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
+
+    const soulsValue = this.add.text(w/2, currentY + 30, `+${Math.floor(offlineProgress.soulsEarned)} âmes`, {
+      ...this.txtStyle(20),
+      color: '#66ccff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
+
+    currentY += 70;
+
+    // Note sur le cap (optionnel)
+    let capNote: Phaser.GameObjects.Text | undefined;
+    const maxPossible = offlineProgress.timeElapsedSeconds * 0.5; // Taux de base
+    if (offlineProgress.soulsEarned < maxPossible * 0.9) {
+      capNote = this.add.text(w/2, currentY, '(Capacité de stockage atteinte)', {
+        ...this.txtStyle(11, true),
+        color: '#ffaa66'
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
+      currentY += 25;
+    }
+
+    // Vagues complétées (si applicable)
+    let wavesLabel: Phaser.GameObjects.Text | undefined;
+    let wavesValue: Phaser.GameObjects.Text | undefined;
+    let separator2: Phaser.GameObjects.Graphics | undefined;
+
+    if (hasWaves) {
+      separator2 = this.add.graphics().setScrollFactor(0).setDepth(2002);
+      separator2.lineStyle(2, 0xd4af37, 0.5);
+      separator2.lineBetween(w/2 - 170, currentY, w/2 + 170, currentY);
+      currentY += 25;
+
+      wavesLabel = this.add.text(w/2, currentY, '🌊 Vagues automatiques', {
+        ...this.txtStyle(14),
+        color: '#cccccc'
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
+
+      wavesValue = this.add.text(w/2, currentY + 30, `+${offlineProgress.wavesCompleted} vagues complétées`, {
+        ...this.txtStyle(18),
+        color: '#7bed9f',
+        fontStyle: 'bold'
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
+
+      currentY += 65;
+    }
+
+    // Bouton continuer
+    const btnW = 180;
+    const btnH = 40;
+    const btnY = h/2 + panelH/2 - 50;
+    const btnBg = this.add.rectangle(w/2, btnY, btnW, btnH, this.theme.buttonFill, 0.95)
+      .setStrokeStyle(2, this.theme.gold, 0.9)
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0)
+      .setDepth(2001);
+    const btnTxt = this.add.text(w/2, btnY, 'Continuer', this.txtStyle(16)).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
+
+    btnBg.on('pointerdown', () => {
+      btnBg.setFillStyle(this.theme.buttonFillActive, 0.95);
+      this.time.delayedCall(100, () => {
+        // Détruire l'overlay
+        bg.destroy();
+        panelBg.destroy();
+        title.destroy();
+        timeLabel.destroy();
+        separator1.destroy();
+        soulsLabel.destroy();
+        soulsValue.destroy();
+        if (capNote) capNote.destroy();
+        if (separator2) separator2.destroy();
+        if (wavesLabel) wavesLabel.destroy();
+        if (wavesValue) wavesValue.destroy();
+        btnBg.destroy();
+        btnTxt.destroy();
+
+        // Réinitialiser le flag
+        this.registry.set('hasOfflineProgress', false);
+      });
+    });
+
+    btnBg.on('pointerover', () => {
+      btnBg.setFillStyle(this.theme.buttonFillHover, 0.95);
+    });
+    btnBg.on('pointerout', () => {
+      btnBg.setFillStyle(this.theme.buttonFill, 0.95);
+    });
+
+    // Animation d'entrée
+    const allElements = [bg, panelBg, title, timeLabel, separator1, soulsLabel, soulsValue, btnBg, btnTxt, capNote, separator2, wavesLabel, wavesValue].filter(Boolean);
+    this.tweens.add({
+      targets: allElements,
+      alpha: { from: 0, to: 1 },
+      duration: 400,
+      ease: 'Quad.Out'
+    });
   }
 }

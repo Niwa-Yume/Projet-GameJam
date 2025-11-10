@@ -3,6 +3,7 @@ import { createBonfire } from '../entities/Bonfire';
 import { createSkeletonEnemy } from '../entities/Enemies';
 import { attachHealthBar, updateHealthBar } from '../ui/HealthBar';
 import { ensureFlameTexture, ensureSmokeTexture } from '../gfx/CanvasTextures';
+import { SaveSystem } from '../utils/SaveSystem';
 
 type EnemyGO = Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
 
@@ -96,6 +97,9 @@ export class GameScene extends Phaser.Scene {
     private soulProductionRate: number = 0.5; // âmes par seconde
     private soulProductionMultiplier: number = 1.0; // multiplicateur global
 
+    // Système de sauvegarde automatique
+    private autoSaveTimer?: Phaser.Time.TimerEvent;
+
     constructor() {
         super('GameScene');
     }
@@ -163,11 +167,69 @@ export class GameScene extends Phaser.Scene {
         this.waveSpawnsRemaining = 0;
         this.autoWaveMode = false; // Commence en mode manuel
 
-        // --- Registry init (AVANT l’UI) ---
-        if (typeof this.registry.get('soulShards') !== 'number') this.registry.set('soulShards', 100);
-        if (typeof this.registry.get('maxSoulShards') !== 'number') this.registry.set('maxSoulShards', 100);
-        if (typeof this.registry.get('sanctuaryHP') !== 'number') this.registry.set('sanctuaryHP', 5);
-        if (typeof this.registry.get('wave') !== 'number') this.registry.set('wave', 0);
+        // === CHARGEMENT DE LA SAUVEGARDE ===
+        const saveData = SaveSystem.load();
+        let offlineProgress = null;
+
+        if (saveData) {
+            // Calculer les gains hors-ligne
+            offlineProgress = SaveSystem.calculateOfflineProgress(saveData);
+            console.log('⏰ Temps écoulé:', SaveSystem.formatTimeElapsed(offlineProgress.timeElapsedSeconds));
+            console.log('💰 Âmes gagnées hors-ligne:', offlineProgress.soulsEarned);
+            console.log('📊 Âmes avant:', saveData.soulShards, '→ après:', offlineProgress.cappedSouls);
+
+            // Stocker pour afficher dans l'UI plus tard
+            this.registry.set('offlineProgress', offlineProgress);
+            this.registry.set('hasOfflineProgress', offlineProgress.timeElapsedSeconds > 60); // Au moins 1 minute
+        }
+
+        // --- Registry init (AVANT l'UI) ---
+        // Utiliser les données sauvegardées si elles existent
+        if (saveData && offlineProgress) {
+            console.log('🔄 Restauration de la sauvegarde...');
+            this.registry.set('soulShards', offlineProgress.cappedSouls);
+            this.registry.set('maxSoulShards', saveData.maxSoulShards);
+            this.registry.set('sanctuaryHP', saveData.sanctuaryHP);
+            // Utiliser le nouveau numéro de vague calculé avec les vagues hors-ligne
+            this.registry.set('wave', offlineProgress.newWaveNumber);
+            this.registry.set('forgeCount', saveData.forgeCount);
+            this.registry.set('barracksCount', saveData.barracksCount);
+
+            // Restaurer le mode auto
+            if (saveData.autoWaveMode) {
+                this.autoWaveMode = true;
+                this.registry.set('autoWaveMode', true);
+            }
+
+            // Restaurer les coûts et production (IMPORTANT: mettre dans le registre aussi !)
+            this.towerCost = saveData.towerCost;
+            this.soulProductionRate = saveData.soulProductionRate;
+            this.soulProductionMultiplier = saveData.soulProductionMultiplier;
+            this.registry.set('soulProductionRate', saveData.soulProductionRate);
+            this.registry.set('soulProductionMultiplier', saveData.soulProductionMultiplier);
+
+            console.log('✅ Sauvegarde restaurée - Âmes:', offlineProgress.cappedSouls, 'Vague:', offlineProgress.newWaveNumber, 'Production:', saveData.soulProductionRate, '×', saveData.soulProductionMultiplier);
+
+            if (offlineProgress.wavesCompleted > 0) {
+                console.log('🌊 PROGRESSION HORS-LIGNE:');
+                console.log('   - Vagues complétées pendant votre absence:', offlineProgress.wavesCompleted);
+                console.log('   - Vague avant:', saveData.wave, '→ Vague maintenant:', offlineProgress.newWaveNumber);
+                console.log('   - Mode auto:', this.autoWaveMode ? 'ACTIF ✅' : 'INACTIF ❌');
+            }
+        } else {
+            console.log('🆕 Nouvelle partie - initialisation par défaut');
+            // Valeurs par défaut pour une nouvelle partie
+            this.registry.set('soulShards', 100);
+            this.registry.set('maxSoulShards', 100);
+            this.registry.set('sanctuaryHP', 5);
+            this.registry.set('wave', 0);
+            this.registry.set('forgeCount', 0);
+            this.registry.set('barracksCount', 0);
+            this.registry.set('soulProductionRate', GameScene.PASSIVE_SOUL_RATE);
+            this.registry.set('soulProductionMultiplier', 1.0);
+        }
+
+        // Toujours définir ces valeurs (communes aux deux cas)
         this.registry.set('buildKind', this.currentBuildKind);
         this.registry.set('towerCost', this.towerCost);
         this.registry.set('buildCost', this.getCurrentCost());
@@ -177,19 +239,22 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('storageCost', this.storageCost);
         this.registry.set('barracksCost', this.barracksCost);
         this.registry.set('wallCost', this.wallCost);
-        this.registry.set('barracksCount', 0);
-        this.registry.set('forgeCount', 0);
         // États de vague garantis à OFF avant l'UI
         this.registry.set('waveActive', false);
         this.registry.set('waveTotal', 0);
         this.registry.set('waveRemaining', 0);
-        this.registry.set('autoWaveMode', false); // Mode manuel au départ
+        // NE PAS écraser autoWaveMode si déjà restauré depuis la sauvegarde !
+        if (!saveData || !saveData.autoWaveMode) {
+            this.registry.set('autoWaveMode', false); // Mode manuel seulement pour nouvelle partie
+        }
         this.registry.set('nextWaveIn', 0); // Pas de compte à rebours
         // Système de production passive d'âmes (idle)
-        if (typeof this.registry.get('soulProductionRate') !== 'number') this.registry.set('soulProductionRate', GameScene.PASSIVE_SOUL_RATE);
-        if (typeof this.registry.get('soulProductionMultiplier') !== 'number') this.registry.set('soulProductionMultiplier', 1.0);
-        this.soulProductionRate = this.registry.get('soulProductionRate') as number;
-        this.soulProductionMultiplier = this.registry.get('soulProductionMultiplier') as number;
+        // Ces valeurs sont déjà définies lors du chargement de la sauvegarde ou de l'initialisation par défaut
+        // On récupère juste les valeurs depuis le registre pour les variables locales
+        this.soulProductionRate = (this.registry.get('soulProductionRate') as number) ?? GameScene.PASSIVE_SOUL_RATE;
+        this.soulProductionMultiplier = (this.registry.get('soulProductionMultiplier') as number) ?? 1.0;
+
+        console.log('🎮 Production active - Taux:', this.soulProductionRate, '× Multiplicateur:', this.soulProductionMultiplier, '= Production totale:', (this.soulProductionRate * this.soulProductionMultiplier), 'âmes/s');
 
         // Lancer l’UI après que la registry soit prête
         this.scene.launch('UIScene');
@@ -221,11 +286,27 @@ export class GameScene extends Phaser.Scene {
         // Démarrer la production passive d'âmes (idle game)
         this.startPassiveSoulProduction();
 
+        // Démarrer la sauvegarde automatique toutes les 30 secondes
+        this.autoSaveTimer = this.time.addEvent({
+            delay: 30000, // 30 secondes
+            loop: true,
+            callback: () => {
+                const buildingsData = this.collectBuildingsData();
+                SaveSystem.save(this.registry, buildingsData);
+            },
+            callbackScope: this
+        });
+
         // Nettoyage au shutdown (retire le timer s'il existe)
         this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
             this.registry.events.off('changedata-buildKind');
             if (this.enemyTimer) { this.time.removeEvent(this.enemyTimer); }
             this.enemyTimer = undefined;
+            if (this.autoSaveTimer) { this.time.removeEvent(this.autoSaveTimer); }
+            this.autoSaveTimer = undefined;
+            // Sauvegarder une dernière fois avant de fermer avec les bâtiments
+            const buildingsData = this.collectBuildingsData();
+            SaveSystem.save(this.registry, buildingsData);
         });
 
         // Inputs
@@ -273,6 +354,34 @@ export class GameScene extends Phaser.Scene {
 
         // Init pathfinding grid
         this.recomputeGrid();
+
+        // Restaurer les bâtiments depuis la sauvegarde
+        console.log('🔍 Vérification sauvegarde bâtiments:', {
+            hasSaveData: !!saveData,
+            hasBuildings: saveData?.buildings !== undefined,
+            buildingsLength: saveData?.buildings?.length ?? 0,
+            buildings: saveData?.buildings
+        });
+
+        if (saveData && saveData.buildings && saveData.buildings.length > 0) {
+            this.restoreBuildings(saveData.buildings);
+        } else {
+            console.log('⚠️ Aucun bâtiment à restaurer');
+        }
+
+        // Si le mode auto était actif, lancer la prochaine vague automatiquement après 3 secondes
+        if (this.autoWaveMode && offlineProgress && offlineProgress.wavesCompleted >= 0) {
+            console.log('🔄 Mode auto détecté au chargement - lancement de la vague dans 3 secondes...');
+            this.registry.set('nextWaveIn', 3);
+            this.nextWaveTimer = this.time.addEvent({
+                delay: 3000,
+                callback: () => {
+                    console.log('🚀 Lancement automatique de la vague', this.registry.get('wave'));
+                    this.startNextWave();
+                },
+                callbackScope: this
+            });
+        }
     }
 
     // Crée un ennemi squelette (Image + physique)
@@ -831,6 +940,13 @@ export class GameScene extends Phaser.Scene {
                 console.log(`🔄 Mode automatique activé après la vague ${currentWave}!`);
             }
 
+            // 🔥 IMPORTANT: Sauvegarder immédiatement la fin de vague pour le calcul hors-ligne
+            if (this.autoWaveMode) {
+                const buildingsData = this.collectBuildingsData();
+                SaveSystem.save(this.registry, buildingsData);
+                console.log(`💾 Sauvegarde immédiate après vague ${currentWave} (mode auto actif)`);
+            }
+
             // Si mode automatique, lancer la vague suivante après 5 secondes
             if (this.autoWaveMode) {
                 console.log(`⏱️ Prochaine vague dans 5 secondes...`);
@@ -1226,6 +1342,21 @@ export class GameScene extends Phaser.Scene {
         else if (kind === 'barracks') this.createBarracks(x, y);
     }
 
+    // Version sans vérifications pour la restauration depuis sauvegarde
+    private createBuildingDirect(kind: 'tower' | 'wall' | 'generator' | 'campfire' | 'forge' | 'storage' | 'barracks', x: number, y: number): void {
+        console.log(`    🔨 Création directe de ${kind} à (${x}, ${y})`);
+        this.createBuilding(kind, x, y);
+        console.log(`    ✅ ${kind} créé, groupes:`, {
+            towers: this.towers?.getLength(),
+            walls: this.walls?.getLength(),
+            generators: this.generators?.getLength(),
+            campfires: this.campfires?.getLength(),
+            forges: this.forges?.getLength(),
+            storages: this.storages?.getLength(),
+            barracks: this.barracks?.getLength()
+        });
+    }
+
 
     private updateHealthBar(go: Phaser.GameObjects.Rectangle): void {
         updateHealthBar(go);
@@ -1544,7 +1675,7 @@ export class GameScene extends Phaser.Scene {
             const yieldMul = 1 + (newLevel * 0.75); // +75% par niveau
             building.setData('yieldMul', yieldMul);
 
-            // Changer la couleur pour indiquer le niveau
+            // Changer la couleur selon le niveau
             const colors = [0x7b6a2e, 0x8f7d3a, 0xa39046, 0xbaa552];
             building.setFillStyle(colors[newLevel]);
 
@@ -1591,5 +1722,216 @@ export class GameScene extends Phaser.Scene {
         }
 
         return { level, maxLevel, nextCost, currentStats, nextStats };
+    }
+
+    // === MÉTHODES DE SAUVEGARDE DES BÂTIMENTS ===
+
+    /**
+     * Collecte les données de tous les bâtiments pour la sauvegarde
+     */
+    public collectBuildingsData(): import('../utils/SaveSystem').SavedBuilding[] {
+        const buildings: import('../utils/SaveSystem').SavedBuilding[] = [];
+
+        // Tours (IMPORTANT: utiliser worldX/worldY car le Rectangle est dans un Container)
+        for (const obj of this.towers.getChildren()) {
+            const tower = obj as Phaser.GameObjects.Rectangle;
+            const worldX = (tower.getData('worldX') as number) ?? tower.x;
+            const worldY = (tower.getData('worldY') as number) ?? tower.y;
+
+            buildings.push({
+                type: 'tower',
+                x: worldX,
+                y: worldY,
+                hp: tower.getData('hp') as number,
+                maxHp: tower.getData('maxHp') as number,
+                upgradeLevel: (tower.getData('upgradeLevel') as number) ?? 0,
+                fireRateMul: (tower.getData('fireRateMul') as number) ?? 1,
+                damageMul: (tower.getData('damageMul') as number) ?? 1
+            });
+        }
+
+        // Murs
+        for (const obj of this.walls.getChildren()) {
+            const wall = obj as Phaser.GameObjects.Rectangle;
+            buildings.push({
+                type: 'wall',
+                x: wall.x,
+                y: wall.y,
+                hp: wall.getData('hp') as number,
+                maxHp: wall.getData('maxHp') as number
+            });
+        }
+
+        // Générateurs
+        for (const obj of this.generators.getChildren()) {
+            const gen = obj as Phaser.GameObjects.Rectangle;
+            buildings.push({
+                type: 'generator',
+                x: gen.x,
+                y: gen.y,
+                hp: gen.getData('hp') as number,
+                maxHp: gen.getData('maxHp') as number,
+                upgradeLevel: (gen.getData('upgradeLevel') as number) ?? 0,
+                yieldMul: (gen.getData('yieldMul') as number) ?? 1
+            });
+        }
+
+        // Feux de camp
+        for (const obj of this.campfires.getChildren()) {
+            const fire = obj as Phaser.GameObjects.Rectangle;
+            buildings.push({
+                type: 'campfire',
+                x: fire.x,
+                y: fire.y,
+                hp: fire.getData('hp') as number,
+                maxHp: fire.getData('maxHp') as number
+            });
+        }
+
+        // Forges
+        for (const obj of this.forges.getChildren()) {
+            const forge = obj as Phaser.GameObjects.Rectangle;
+            buildings.push({
+                type: 'forge',
+                x: forge.x,
+                y: forge.y,
+                hp: forge.getData('hp') as number,
+                maxHp: forge.getData('maxHp') as number
+            });
+        }
+
+        // Réserves
+        for (const obj of this.storages.getChildren()) {
+            const storage = obj as Phaser.GameObjects.Rectangle;
+            buildings.push({
+                type: 'storage',
+                x: storage.x,
+                y: storage.y,
+                hp: storage.getData('hp') as number,
+                maxHp: storage.getData('maxHp') as number,
+                capInc: storage.getData('capInc') as number
+            });
+        }
+
+        // Casernes
+        for (const obj of this.barracks.getChildren()) {
+            const barrack = obj as Phaser.GameObjects.Rectangle;
+            buildings.push({
+                type: 'barracks',
+                x: barrack.x,
+                y: barrack.y,
+                hp: barrack.getData('hp') as number,
+                maxHp: barrack.getData('maxHp') as number
+            });
+        }
+
+        const counts = buildings.reduce((acc, b) => {
+            acc[b.type] = (acc[b.type] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
+        console.log('📦 Collecte de', buildings.length, 'bâtiments pour la sauvegarde:', counts);
+        console.log('   Détails tours:', buildings.filter(b => b.type === 'tower').map(b => `(${b.x}, ${b.y})`));
+        return buildings;
+    }
+
+    /**
+     * Restaure les bâtiments depuis la sauvegarde
+     */
+    public restoreBuildings(buildings: import('../utils/SaveSystem').SavedBuilding[]): void {
+        console.log('🏗️ Restauration de', buildings.length, 'bâtiments...');
+
+        for (const building of buildings) {
+            console.log(`  📍 Restauration ${building.type} à (${building.x}, ${building.y})`);
+
+            // Créer le bâtiment selon son type (sans vérifications de coût)
+            this.createBuildingDirect(building.type, building.x, building.y);
+
+            // Récupérer le bâtiment qui vient d'être créé
+            let builtObject: Phaser.GameObjects.Rectangle | undefined;
+
+            switch (building.type) {
+                case 'tower':
+                    builtObject = this.towers.getChildren()[this.towers.getLength() - 1] as Phaser.GameObjects.Rectangle;
+                    break;
+                case 'wall':
+                    builtObject = this.walls.getChildren()[this.walls.getLength() - 1] as Phaser.GameObjects.Rectangle;
+                    break;
+                case 'generator':
+                    builtObject = this.generators.getChildren()[this.generators.getLength() - 1] as Phaser.GameObjects.Rectangle;
+                    break;
+                case 'campfire':
+                    builtObject = this.campfires.getChildren()[this.campfires.getLength() - 1] as Phaser.GameObjects.Rectangle;
+                    break;
+                case 'forge':
+                    builtObject = this.forges.getChildren()[this.forges.getLength() - 1] as Phaser.GameObjects.Rectangle;
+                    break;
+                case 'storage':
+                    builtObject = this.storages.getChildren()[this.storages.getLength() - 1] as Phaser.GameObjects.Rectangle;
+                    break;
+                case 'barracks':
+                    builtObject = this.barracks.getChildren()[this.barracks.getLength() - 1] as Phaser.GameObjects.Rectangle;
+                    break;
+            }
+
+            if (!builtObject) continue;
+
+            // Restaurer les propriétés sauvegardées
+            if (building.hp !== undefined) builtObject.setData('hp', building.hp);
+            if (building.maxHp !== undefined) builtObject.setData('maxHp', building.maxHp);
+            if (building.upgradeLevel !== undefined) builtObject.setData('upgradeLevel', building.upgradeLevel);
+
+            // Propriétés spécifiques aux tours
+            if (building.type === 'tower') {
+                if (building.fireRateMul !== undefined) builtObject.setData('fireRateMul', building.fireRateMul);
+                if (building.damageMul !== undefined) builtObject.setData('damageMul', building.damageMul);
+
+                // Mettre à jour l'apparence de la tour selon le niveau
+                const level = building.upgradeLevel ?? 0;
+                if (level > 0) {
+                    const glow = builtObject.getData('glow') as Phaser.GameObjects.Graphics | undefined;
+                    if (glow) {
+                        glow.clear();
+                        const glowColors = [0x6b8fa5, 0x5a9fbf, 0x7aafd0, 0x9fd5ff];
+                        glow.fillStyle(glowColors[level], 0.5 + level * 0.1);
+                        glow.fillRect(-2, -6, 4, 8);
+                    }
+
+                    // Bannière à partir du niveau 2
+                    const banner = builtObject.getData('banner') as Phaser.GameObjects.Graphics | undefined;
+                    if (banner && level >= 2) {
+                        const col = level === 3 ? 0x8c6b2e : 0x3a3f5a;
+                        banner.setVisible(true);
+                        banner.clear();
+                        banner.fillStyle(col, 1);
+                        banner.fillRect(-6, -18, 12, 18);
+                        banner.fillTriangle(-6, 0, 0, 6, 6, 0);
+                        banner.lineStyle(1, 0x1a1510, 0.8).strokeRect(-6, -18, 12, 18);
+                    }
+                }
+            }
+
+            // Propriétés spécifiques aux générateurs
+            if (building.type === 'generator') {
+                if (building.yieldMul !== undefined) builtObject.setData('yieldMul', building.yieldMul);
+
+                // Mettre à jour la couleur selon le niveau
+                const level = building.upgradeLevel ?? 0;
+                if (level > 0) {
+                    const colors = [0x7b6a2e, 0x8f7d3a, 0xa39046, 0xbaa552];
+                    builtObject.setFillStyle(colors[level]);
+                }
+            }
+
+            // Propriétés spécifiques aux réserves
+            if (building.type === 'storage' && building.capInc !== undefined) {
+                builtObject.setData('capInc', building.capInc);
+            }
+
+            // Mettre à jour la barre de vie
+            this.updateHealthBar(builtObject);
+        }
+
+        console.log('✅ Restauration des bâtiments terminée !');
     }
 }
