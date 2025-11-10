@@ -11,8 +11,6 @@ export class PathfindingGrid {
   private blocked: boolean[][];
 
   constructor(
-    gameAreaX: number,
-    gameAreaY: number,
     gameAreaW: number,
     gameAreaH: number
   ) {

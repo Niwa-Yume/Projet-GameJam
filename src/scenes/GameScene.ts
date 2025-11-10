@@ -325,7 +325,7 @@ export class GameScene extends Phaser.Scene {
         });
 
         // Init pathfinding grid
-        this.pathfindingGrid = new PathfindingGrid(gameAreaX, gameAreaY, gameAreaW, gameAreaH);
+        this.pathfindingGrid = new PathfindingGrid(gameAreaW, gameAreaH);
 
         // Restaurer les bâtiments depuis la sauvegarde
         console.log('🔍 Vérification sauvegarde bâtiments:', {
