@@ -4,6 +4,8 @@ import { createSkeletonEnemy } from '../entities/Enemies';
 import { attachHealthBar, updateHealthBar } from '../ui/HealthBar';
 import { ensureFlameTexture, ensureSmokeTexture } from '../gfx/CanvasTextures';
 import { SaveSystem } from '../utils/SaveSystem';
+import { GameConstants } from './GameConstants';
+import { PathfindingGrid } from './PathfindingGrid';
 
 type EnemyGO = Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
 
@@ -28,62 +30,32 @@ export class GameScene extends Phaser.Scene {
     // Timer de spawn ennemi
     private enemyTimer?: Phaser.Time.TimerEvent;
 
-    // Grille et constantes de gameplay
-    private static readonly TILE_SIZE = 64;
-    // Zone de jeu (map) avec marges pour l'UI
-    private static readonly GAME_AREA_WIDTH = 800;
-    private static readonly GAME_AREA_HEIGHT = 600;
-    private static readonly UI_MARGIN_LEFT = 250; // Marge gauche pour l'UI
-    private static readonly UI_MARGIN_TOP = 50;   // Marge haute pour l'UI
-    private static readonly ENEMY_SPEED = 80;
-    private static readonly TOWER_RANGE = 160; // portée en pixels
-    private static readonly TOWER_FIRE_RATE = 500; // ms entre deux tirs
-    private static readonly BULLET_SPEED = 300; // pixels/s
-    private static readonly SHARD_REWARD = 5; // récompense par kill
-    private static readonly ATTACK_RANGE = 28; // rayon pour considérer un contact avec un bâtiment 48x48
-    private static readonly ENEMY_DPS = 30; // dégâts par seconde infligés aux bâtiments
-    // Générateur d'éclats
-    private static readonly GENERATOR_TICK_MS = 2000; // production toutes les 2s
-    private static readonly GENERATOR_YIELD = 2; // éclats produits par tick
-    // Production passive d'âmes (idle)
-    private static readonly PASSIVE_SOUL_RATE = 0.5; // âmes par seconde (base)
-    // Auras
-    private static readonly CAMPFIRE_RADIUS = 120;
-    private static readonly CAMPFIRE_HEAL = 5; // PV par tick
-    private static readonly CAMPFIRE_TICK_MS = 1500;
+    // Grille de pathfinding
+    private pathfindingGrid!: PathfindingGrid;
 
     // Prévisualisation de placement
     private previewGhost?: Phaser.GameObjects.Rectangle;
     private previewRangeGfx?: Phaser.GameObjects.Graphics;
 
     // Économie et vagues
-    private towerCost: number = 25; // coût dynamique de la tour
-    private wallCost: number = 5; // coût fixe d'un mur (placeholder)
-    private generatorCost: number = 40; // coût du générateur
-    private campfireCost: number = 35;
-    private forgeCost: number = 60;
-    private storageCost: number = 45;
-    private enemySpeed: number = 80;
+    private towerCost: number = GameConstants.INITIAL_TOWER_COST;
+    private wallCost: number = GameConstants.INITIAL_WALL_COST;
+    private generatorCost: number = GameConstants.INITIAL_GENERATOR_COST;
+    private campfireCost: number = GameConstants.INITIAL_CAMPFIRE_COST;
+    private forgeCost: number = GameConstants.INITIAL_FORGE_COST;
+    private storageCost: number = GameConstants.INITIAL_STORAGE_COST;
+    private barracksCost: number = GameConstants.INITIAL_BARRACKS_COST;
+    private enemySpeed: number = GameConstants.ENEMY_SPEED;
 
     // Sélection du type de bâtiment
     private currentBuildKind: 'tower' | 'wall' | 'generator' | 'campfire' | 'forge' | 'storage' | 'barracks' = 'tower';
 
     // Recrutement
-    private barracksCost: number = 70;
     private trainingQueue: Array<'knight' | 'watcher' | 'arbalest'> = [];
     private activeTrainings: Phaser.Time.TimerEvent[] = [];
 
-    // Définitions des unités (Dark Souls vibes)
-    private unitDefs = {
-        knight: { cost: 20, trainMs: 2000, speed: 110, atkRange: 20, atkRateMs: 700, role: 'melee' as const },
-        watcher: { cost: 35, trainMs: 3000, speed: 125, atkRange: 26, atkRateMs: 550, role: 'melee' as const },
-        arbalest: { cost: 30, trainMs: 2500, speed: 120, atkRange: 180, atkRateMs: 800, role: 'ranged' as const }
-    };
-
-    // Pathfinding (grille bloquée par les murs)
-    private gridCols!: number;
-    private gridRows!: number;
-    private blocked!: boolean[][]; // true = bloqué
+    // Pathfinding (utilise maintenant PathfindingGrid)
+    // ... removed old gridCols, gridRows, blocked ...
 
     // État de vague
     private waveActive: boolean = false;
@@ -132,10 +104,10 @@ export class GameScene extends Phaser.Scene {
         // Pas besoin de les détruire manuellement
 
         // === CRÉER LA ZONE DE JEU AVEC BORDURE ===
-        const gameAreaX = GameScene.UI_MARGIN_LEFT;
-        const gameAreaY = GameScene.UI_MARGIN_TOP;
-        const gameAreaW = GameScene.GAME_AREA_WIDTH;
-        const gameAreaH = GameScene.GAME_AREA_HEIGHT;
+        const gameAreaX = GameConstants.UI_MARGIN_LEFT;
+        const gameAreaY = GameConstants.UI_MARGIN_TOP;
+        const gameAreaW = GameConstants.GAME_AREA_WIDTH;
+        const gameAreaH = GameConstants.GAME_AREA_HEIGHT;
 
         // Fond de la zone de jeu
         this.add.rectangle(gameAreaX, gameAreaY, gameAreaW, gameAreaH, 0x1a1612, 1)
@@ -149,7 +121,7 @@ export class GameScene extends Phaser.Scene {
         border.setDepth(100);
 
         // Déterminer et aligner la position du sanctuaire sur la grille, au centre de la ZONE DE JEU
-        const TS = GameScene.TILE_SIZE;
+        const TS = GameConstants.TILE_SIZE;
         const centerX = gameAreaX + gameAreaW / 2;
         const centerY = gameAreaY + gameAreaH / 2;
         const cellX = Math.floor(centerX / TS);
@@ -157,7 +129,7 @@ export class GameScene extends Phaser.Scene {
         this.sanctuaryPos = { x: cellX * TS + TS / 2, y: cellY * TS + TS / 2 };
 
         // Réinitialiser explicitement l'état de vague et du spawner avant d'exposer la registry à l'UI
-        this.enemySpeed = GameScene.ENEMY_SPEED;
+        this.enemySpeed = GameConstants.ENEMY_SPEED;
         if (this.enemyTimer) { this.time.removeEvent(this.enemyTimer); }
         this.enemyTimer = undefined;
         if (this.nextWaveTimer) { this.time.removeEvent(this.nextWaveTimer); }
@@ -225,7 +197,7 @@ export class GameScene extends Phaser.Scene {
             this.registry.set('wave', 0);
             this.registry.set('forgeCount', 0);
             this.registry.set('barracksCount', 0);
-            this.registry.set('soulProductionRate', GameScene.PASSIVE_SOUL_RATE);
+            this.registry.set('soulProductionRate', GameConstants.PASSIVE_SOUL_RATE);
             this.registry.set('soulProductionMultiplier', 1.0);
         }
 
@@ -251,7 +223,7 @@ export class GameScene extends Phaser.Scene {
         // Système de production passive d'âmes (idle)
         // Ces valeurs sont déjà définies lors du chargement de la sauvegarde ou de l'initialisation par défaut
         // On récupère juste les valeurs depuis le registre pour les variables locales
-        this.soulProductionRate = (this.registry.get('soulProductionRate') as number) ?? GameScene.PASSIVE_SOUL_RATE;
+        this.soulProductionRate = (this.registry.get('soulProductionRate') as number) ?? GameConstants.PASSIVE_SOUL_RATE;
         this.soulProductionMultiplier = (this.registry.get('soulProductionMultiplier') as number) ?? 1.0;
 
         console.log('🎮 Production active - Taux:', this.soulProductionRate, '× Multiplicateur:', this.soulProductionMultiplier, '= Production totale:', (this.soulProductionRate * this.soulProductionMultiplier), 'âmes/s');
@@ -328,7 +300,7 @@ export class GameScene extends Phaser.Scene {
         this.input.keyboard?.on('keydown-NUMPAD_SEVEN', () => this.setBuildKind('barracks'));
 
         // Spawner d'ennemis
-        this.enemySpeed = GameScene.ENEMY_SPEED;
+        this.enemySpeed = GameConstants.ENEMY_SPEED;
         if (this.enemyTimer) { this.time.removeEvent(this.enemyTimer); }
         this.enemyTimer = undefined;
         this.waveActive = false;
@@ -353,7 +325,7 @@ export class GameScene extends Phaser.Scene {
         });
 
         // Init pathfinding grid
-        this.recomputeGrid();
+        this.pathfindingGrid = new PathfindingGrid(gameAreaX, gameAreaY, gameAreaW, gameAreaH);
 
         // Restaurer les bâtiments depuis la sauvegarde
         console.log('🔍 Vérification sauvegarde bâtiments:', {
@@ -553,7 +525,7 @@ export class GameScene extends Phaser.Scene {
         attachHealthBar(this, tower);
         tower.setInteractive({ useHandCursor: true });
         const rangeGfx = this.add.graphics().setDepth(9).setVisible(false);
-        const drawRange = () => { rangeGfx.clear(); rangeGfx.lineStyle(1, 0x6b8fa5, 0.85); rangeGfx.strokeCircle(x, y, GameScene.TOWER_RANGE); };
+        const drawRange = () => { rangeGfx.clear(); rangeGfx.lineStyle(1, 0x6b8fa5, 0.85); rangeGfx.strokeCircle(x, y, GameConstants.TOWER_RANGE); };
         const showRange = () => { drawRange(); rangeGfx.setVisible(true); };
         const hideRange = () => { rangeGfx.setVisible(false); };
         tower.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OVER, showRange);
@@ -604,8 +576,8 @@ export class GameScene extends Phaser.Scene {
         attachHealthBar(this, gen);
         gen.setInteractive({ useHandCursor: true });
 
-        const baseYield = GameScene.GENERATOR_YIELD;
-        const timer = this.time.addEvent({ delay: GameScene.GENERATOR_TICK_MS, loop: true, callback: () => {
+        const baseYield = GameConstants.GENERATOR_YIELD;
+        const timer = this.time.addEvent({ delay: GameConstants.GENERATOR_TICK_MS, loop: true, callback: () => {
             const mul = (gen.getData('yieldMul') as number) ?? 1;
             this.addShards(baseYield * mul);
         }});
@@ -642,7 +614,7 @@ export class GameScene extends Phaser.Scene {
         }});
         fire.once(Phaser.GameObjects.Events.DESTROY, () => { aura.destroy(); this.campfires.remove(fire, false, false); });
 
-        const timer = this.time.addEvent({ delay: GameScene.CAMPFIRE_TICK_MS, loop: true, callback: () => {
+        const timer = this.time.addEvent({ delay: GameConstants.CAMPFIRE_TICK_MS, loop: true, callback: () => {
             const healTargets: Phaser.GameObjects.Rectangle[] = [];
             healTargets.push(
                 ...(this.towers.getChildren() as Phaser.GameObjects.Rectangle[]),
@@ -654,11 +626,11 @@ export class GameScene extends Phaser.Scene {
             );
             for (const go of healTargets) {
                 const d = Phaser.Math.Distance.Between(x, y, go.x, go.y);
-                if (d <= GameScene.CAMPFIRE_RADIUS) {
+                if (d <= GameConstants.CAMPFIRE_RADIUS) {
                     const hp = (go.getData('hp') as number) ?? 0;
                     const max = (go.getData('maxHp') as number) ?? 0;
                     if (hp > 0 && max > 0 && hp < max) {
-                        const nh = Math.min(max, hp + GameScene.CAMPFIRE_HEAL);
+                        const nh = Math.min(max, hp + GameConstants.CAMPFIRE_HEAL);
                         go.setData('hp', nh);
                         this.updateHealthBar(go);
                     }
@@ -774,7 +746,7 @@ export class GameScene extends Phaser.Scene {
 
         // --- Tours ---
         const now = this.time.now;
-        const range = GameScene.TOWER_RANGE;
+        const range = GameConstants.TOWER_RANGE;
 
         for (const obj of this.towers.getChildren()) {
             const tower = obj as Phaser.GameObjects.Rectangle;
@@ -795,7 +767,7 @@ export class GameScene extends Phaser.Scene {
 
             this.fireFromTower(tower, target);
             const rateMul = (tower.getData('fireRateMul') as number) ?? 1;
-            tower.setData('nextFire', now + GameScene.TOWER_FIRE_RATE * rateMul);
+            tower.setData('nextFire', now + GameConstants.TOWER_FIRE_RATE * rateMul);
         }
 
         // --- Défense sanctuaire (ennemis qui touchent) ---
@@ -892,7 +864,7 @@ export class GameScene extends Phaser.Scene {
             if (target && target.active) {
                 // Infliger des dégâts
                 const hpB = (target.getData('hp') as number) ?? 0;
-                const newHp = hpB - GameScene.ENEMY_DPS * dt;
+                const newHp = hpB - GameConstants.ENEMY_DPS * dt;
                 target.setData('hp', newHp);
                 this.updateHealthBar(target);
                 if (newHp <= 0) {
@@ -1004,8 +976,8 @@ export class GameScene extends Phaser.Scene {
         const dx = target.x - towerX;
         const dy = target.y - towerY;
         const len = Math.hypot(dx, dy) || 1;
-        const vx = (dx / len) * GameScene.BULLET_SPEED;
-        const vy = (dy / len) * GameScene.BULLET_SPEED;
+        const vx = (dx / len) * GameConstants.BULLET_SPEED;
+        const vy = (dy / len) * GameConstants.BULLET_SPEED;
         body.setVelocity(vx, vy);
 
         // Ajout visuel léger: tween d'alpha
@@ -1024,8 +996,8 @@ export class GameScene extends Phaser.Scene {
         const dx = target.x - ally.x;
         const dy = target.y - ally.y;
         const len = Math.hypot(dx, dy) || 1;
-        const vx = (dx / len) * (GameScene.BULLET_SPEED * 0.9);
-        const vy = (dy / len) * (GameScene.BULLET_SPEED * 0.9);
+        const vx = (dx / len) * (GameConstants.BULLET_SPEED * 0.9);
+        const vy = (dy / len) * (GameConstants.BULLET_SPEED * 0.9);
         body.setVelocity(vx, vy);
     }
 
@@ -1041,7 +1013,7 @@ export class GameScene extends Phaser.Scene {
         if (this.enemies.contains(enemyGO as any)) this.enemies.remove(enemyGO as any, true, false);
         enemyGO.destroy();
         bulletGO.destroy();
-        this.addShards(GameScene.SHARD_REWARD);
+        this.addShards(GameConstants.SHARD_REWARD);
         this.decWaveRemaining(1);
         console.log(`✅ Ennemi tué ! Ennemis restants: ${this.enemies.getLength()}`);
     }
@@ -1058,31 +1030,31 @@ export class GameScene extends Phaser.Scene {
     private findBuildingAt(x: number, y: number): Phaser.GameObjects.Rectangle | undefined {
         for (const obj of this.walls.getChildren()) {
             const go = obj as Phaser.GameObjects.Rectangle;
-            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameScene.ATTACK_RANGE) return go;
+            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameConstants.ATTACK_RANGE) return go;
         }
         for (const obj of this.towers.getChildren()) {
             const go = obj as Phaser.GameObjects.Rectangle;
-            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameScene.ATTACK_RANGE) return go;
+            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameConstants.ATTACK_RANGE) return go;
         }
         for (const obj of this.generators.getChildren()) {
             const go = obj as Phaser.GameObjects.Rectangle;
-            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameScene.ATTACK_RANGE) return go;
+            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameConstants.ATTACK_RANGE) return go;
         }
         for (const obj of this.campfires.getChildren()) {
             const go = obj as Phaser.GameObjects.Rectangle;
-            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameScene.ATTACK_RANGE) return go;
+            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameConstants.ATTACK_RANGE) return go;
         }
         for (const obj of this.forges.getChildren()) {
             const go = obj as Phaser.GameObjects.Rectangle;
-            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameScene.ATTACK_RANGE) return go;
+            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameConstants.ATTACK_RANGE) return go;
         }
         for (const obj of this.storages.getChildren()) {
             const go = obj as Phaser.GameObjects.Rectangle;
-            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameScene.ATTACK_RANGE) return go;
+            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameConstants.ATTACK_RANGE) return go;
         }
         for (const obj of this.barracks.getChildren()) {
             const go = obj as Phaser.GameObjects.Rectangle;
-            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameScene.ATTACK_RANGE) return go;
+            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameConstants.ATTACK_RANGE) return go;
         }
         return undefined;
     }
@@ -1105,7 +1077,7 @@ export class GameScene extends Phaser.Scene {
         const currentWave = ((this.registry.get('wave') as number) ?? 1) + 1;
         this.registry.set('wave', currentWave);
         // Met à jour difficulté
-        this.enemySpeed = GameScene.ENEMY_SPEED + (currentWave - 1) * 10;
+        this.enemySpeed = GameConstants.ENEMY_SPEED + (currentWave - 1) * 10;
         const interval = Math.max(500, 1000 - (currentWave - 1) * 50);
         const count = 10 + (currentWave - 1) * 2;
         this.waveSpawning = true;
@@ -1138,7 +1110,7 @@ export class GameScene extends Phaser.Scene {
 
     // API publique pour l’UI: recruter une unité
     public recruitUnit(kind: 'knight' | 'watcher' | 'arbalest'): void {
-        const def = this.unitDefs[kind];
+        const def = GameConstants.UNIT_DEFS[kind];
         if (!def) return;
         const barracksCount = (this.registry.get('barracksCount') as number) ?? 0;
         if (barracksCount <= 0) return; // pas de caserne
@@ -1158,7 +1130,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     private startTraining(kind: 'knight' | 'watcher' | 'arbalest'): void {
-        const def = this.unitDefs[kind];
+        const def = GameConstants.UNIT_DEFS[kind];
         const timer = this.time.addEvent({ delay: def.trainMs, callback: () => {
             this.spawnAlly(kind);
             const idx = this.activeTrainings.indexOf(timer);
@@ -1192,7 +1164,7 @@ export class GameScene extends Phaser.Scene {
         const allies = this.allies.getChildren() as Phaser.GameObjects.Rectangle[];
         for (const a of allies) {
             const kind = a.getData('kind') as 'knight' | 'watcher' | 'arbalest';
-            const def = this.unitDefs[kind];
+            const def = GameConstants.UNIT_DEFS[kind];
             const vision = kind === 'arbalest' ? def.atkRange : 220;
             const target = this.findTarget(a.x, a.y, vision);
             const body = a.body as Phaser.Physics.Arcade.Body | undefined;
@@ -1216,7 +1188,7 @@ export class GameScene extends Phaser.Scene {
                             // Retirer proprement du groupe puis détruire
                             if (this.enemies.contains(target as any)) this.enemies.remove(target as any, true, false);
                             target.destroy();
-                            this.addShards(GameScene.SHARD_REWARD);
+                            this.addShards(GameConstants.SHARD_REWARD);
                             this.decWaveRemaining(1);
                             a.setData('nextAtk', now + def.atkRateMs);
                         }
@@ -1248,10 +1220,10 @@ export class GameScene extends Phaser.Scene {
 
         const worldX = pointer.worldX;
         const worldY = pointer.worldY;
-        const gameAreaX = GameScene.UI_MARGIN_LEFT;
-        const gameAreaY = GameScene.UI_MARGIN_TOP;
-        const gameAreaRight = gameAreaX + GameScene.GAME_AREA_WIDTH;
-        const gameAreaBottom = gameAreaY + GameScene.GAME_AREA_HEIGHT;
+        const gameAreaX = GameConstants.UI_MARGIN_LEFT;
+        const gameAreaY = GameConstants.UI_MARGIN_TOP;
+        const gameAreaRight = gameAreaX + GameConstants.GAME_AREA_WIDTH;
+        const gameAreaBottom = gameAreaY + GameConstants.GAME_AREA_HEIGHT;
 
         // Cacher le preview si hors de la zone de jeu
         if (worldX < gameAreaX || worldX > gameAreaRight || worldY < gameAreaY || worldY > gameAreaBottom) {
@@ -1260,7 +1232,7 @@ export class GameScene extends Phaser.Scene {
             return;
         }
 
-        const TS = GameScene.TILE_SIZE;
+        const TS = GameConstants.TILE_SIZE;
         const cellX = Math.floor((worldX - gameAreaX) / TS);
         const cellY = Math.floor((worldY - gameAreaY) / TS);
         const snappedX = gameAreaX + cellX * TS + TS / 2;
@@ -1273,7 +1245,7 @@ export class GameScene extends Phaser.Scene {
         this.previewRangeGfx.clear();
         if (this.currentBuildKind === 'tower') {
             this.previewRangeGfx.lineStyle(1, valid ? 0x9f8d62 : 0x7a1a1a, 0.85);
-            this.previewRangeGfx.strokeCircle(snappedX, snappedY, GameScene.TOWER_RANGE);
+            this.previewRangeGfx.strokeCircle(snappedX, snappedY, GameConstants.TOWER_RANGE);
             this.previewRangeGfx.setVisible(true);
         } else {
             this.previewRangeGfx.setVisible(false);
@@ -1285,20 +1257,20 @@ export class GameScene extends Phaser.Scene {
         const worldY = pointer.worldY;
 
         // Vérifier si le clic est dans la zone de jeu
-        const gameAreaX = GameScene.UI_MARGIN_LEFT;
-        const gameAreaY = GameScene.UI_MARGIN_TOP;
-        const gameAreaRight = gameAreaX + GameScene.GAME_AREA_WIDTH;
-        const gameAreaBottom = gameAreaY + GameScene.GAME_AREA_HEIGHT;
+        const gameAreaX = GameConstants.UI_MARGIN_LEFT;
+        const gameAreaY = GameConstants.UI_MARGIN_TOP;
+        const gameAreaRight = gameAreaX + GameConstants.GAME_AREA_WIDTH;
+        const gameAreaBottom = gameAreaY + GameConstants.GAME_AREA_HEIGHT;
 
         if (worldX < gameAreaX || worldX > gameAreaRight || worldY < gameAreaY || worldY > gameAreaBottom) {
             return; // Clic hors de la zone de jeu
         }
 
-        const TS = GameScene.TILE_SIZE;
+        const TS = GameConstants.TILE_SIZE;
         const cellX = Math.floor((worldX - gameAreaX) / TS);
         const cellY = Math.floor((worldY - gameAreaY) / TS);
-        const cols = Math.floor(GameScene.GAME_AREA_WIDTH / TS);
-        const rows = Math.floor(GameScene.GAME_AREA_HEIGHT / TS);
+        const cols = Math.floor(GameConstants.GAME_AREA_WIDTH / TS);
+        const rows = Math.floor(GameConstants.GAME_AREA_HEIGHT / TS);
         if (cellX < 0 || cellY < 0 || cellX >= cols || cellY >= rows) return;
         const snappedX = gameAreaX + cellX * TS + TS / 2;
         const snappedY = gameAreaY + cellY * TS + TS / 2;
@@ -1363,12 +1335,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     private canPlaceAt(cellX: number, cellY: number): boolean {
-        const TS = GameScene.TILE_SIZE;
-        const cols = Math.floor(GameScene.GAME_AREA_WIDTH / TS);
-        const rows = Math.floor(GameScene.GAME_AREA_HEIGHT / TS);
+        const TS = GameConstants.TILE_SIZE;
+        const cols = Math.floor(GameConstants.GAME_AREA_WIDTH / TS);
+        const rows = Math.floor(GameConstants.GAME_AREA_HEIGHT / TS);
         if (cellX < 0 || cellY < 0 || cellX >= cols || cellY >= rows) return false;
-        const snappedX = GameScene.UI_MARGIN_LEFT + cellX * TS + TS / 2;
-        const snappedY = GameScene.UI_MARGIN_TOP + cellY * TS + TS / 2;
+        const snappedX = GameConstants.UI_MARGIN_LEFT + cellX * TS + TS / 2;
+        const snappedY = GameConstants.UI_MARGIN_TOP + cellY * TS + TS / 2;
         if (Math.abs(snappedX - this.sanctuaryPos.x) < 1 && Math.abs(snappedY - this.sanctuaryPos.y) < 1) return false;
         const occupied = (
             this.towers.getChildren() as Phaser.GameObjects.Rectangle[]
@@ -1386,9 +1358,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     private isOccupiedCell(cellX: number, cellY: number): boolean {
-        const TS = GameScene.TILE_SIZE;
-        const snappedX = GameScene.UI_MARGIN_LEFT + cellX * TS + TS / 2;
-        const snappedY = GameScene.UI_MARGIN_TOP + cellY * TS + TS / 2;
+        const TS = GameConstants.TILE_SIZE;
+        const snappedX = GameConstants.UI_MARGIN_LEFT + cellX * TS + TS / 2;
+        const snappedY = GameConstants.UI_MARGIN_TOP + cellY * TS + TS / 2;
         return (
             (this.towers.getChildren() as Phaser.GameObjects.Rectangle[]).some(go => Math.abs(go.x - snappedX) < 1 && Math.abs(go.y - snappedY) < 1) ||
             (this.walls.getChildren() as Phaser.GameObjects.Rectangle[]).some(go => Math.abs(go.x - snappedX) < 1 && Math.abs(go.y - snappedY) < 1) ||
@@ -1407,40 +1379,34 @@ export class GameScene extends Phaser.Scene {
 
     // Init pathfinding grid
     private recomputeGrid(): void {
-        const TS = GameScene.TILE_SIZE;
-        this.gridCols = Math.floor(GameScene.GAME_AREA_WIDTH / TS);
-        this.gridRows = Math.floor(GameScene.GAME_AREA_HEIGHT / TS);
-        this.blocked = Array.from({ length: this.gridRows }, () => Array(this.gridCols).fill(false));
-        const walls = this.walls.getChildren() as Phaser.GameObjects.Rectangle[];
-        for (const w of walls) {
-            const c = this.worldToCell(w.x, w.y);
-            if (c && this.inBounds(c.cx, c.cy)) this.blocked[c.cy][c.cx] = true;
-        }
+        const gameAreaX = GameConstants.UI_MARGIN_LEFT;
+        const gameAreaY = GameConstants.UI_MARGIN_TOP;
+        this.pathfindingGrid.recomputeFromWalls(this.walls, gameAreaX, gameAreaY);
     }
 
     private inBounds(cx: number, cy: number): boolean {
-        return cx >= 0 && cy >= 0 && cx < this.gridCols && cy < this.gridRows;
+        const { cols, rows } = this.pathfindingGrid.getDimensions();
+        return cx >= 0 && cy >= 0 && cx < cols && cy < rows;
     }
 
     private worldToCell(x: number, y: number): { cx: number; cy: number } {
-        const TS = GameScene.TILE_SIZE;
-        // Ajuster pour la zone de jeu décalée
-        const cx = Math.floor((x - GameScene.UI_MARGIN_LEFT) / TS);
-        const cy = Math.floor((y - GameScene.UI_MARGIN_TOP) / TS);
-        return { cx, cy };
+        const gameAreaX = GameConstants.UI_MARGIN_LEFT;
+        const gameAreaY = GameConstants.UI_MARGIN_TOP;
+        const { col, row } = this.pathfindingGrid.pixelToGrid(x, y, gameAreaX, gameAreaY);
+        return { cx: col, cy: row };
     }
 
     private cellToWorld(cx: number, cy: number): { x: number; y: number } {
-        const TS = GameScene.TILE_SIZE;
-        // Ajuster pour la zone de jeu décalée
+        const TS = GameConstants.TILE_SIZE;
         return {
-            x: GameScene.UI_MARGIN_LEFT + cx * TS + TS / 2,
-            y: GameScene.UI_MARGIN_TOP + cy * TS + TS / 2
+            x: GameConstants.UI_MARGIN_LEFT + cx * TS + TS / 2,
+            y: GameConstants.UI_MARGIN_TOP + cy * TS + TS / 2
         };
     }
 
     private findPath(start: { cx: number; cy: number }, goal: { cx: number; cy: number }): { cx: number; cy: number }[] | null {
         if (!this.inBounds(start.cx, start.cy) || !this.inBounds(goal.cx, goal.cy)) return null;
+        const grid = this.pathfindingGrid.getGrid();
         const q: { cx: number; cy: number }[] = [];
         const seen = new Set<string>();
         const parent = new Map<string, string>();
@@ -1466,7 +1432,7 @@ export class GameScene extends Phaser.Scene {
             for (const [dx, dy] of dirs) {
                 const nx = cur.cx + dx, ny = cur.cy + dy;
                 if (!this.inBounds(nx, ny)) continue;
-                if (this.blocked[ny][nx]) continue;
+                if (grid[ny][nx]) continue;
                 const nk = `${nx},${ny}`;
                 if (seen.has(nk)) continue;
                 seen.add(nk);
@@ -1478,13 +1444,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     private pickSpawnCell(): { cx: number; cy: number } | null {
+        const { rows } = this.pathfindingGrid.getDimensions();
         const cx = 0; // Bord gauche de la grille (zone de jeu)
         for (let i = 0; i < 10; i++) {
-            const cy = Phaser.Math.Between(0, this.gridRows - 1);
-            if (!this.blocked[cy][cx]) return { cx, cy };
+            const cy = Phaser.Math.Between(0, rows - 1);
+            if (!this.pathfindingGrid.isBlocked(cx, cy)) return { cx, cy };
         }
-        for (let cy = 0; cy < this.gridRows; cy++) {
-            if (!this.blocked[cy][cx]) return { cx, cy };
+        for (let cy = 0; cy < rows; cy++) {
+            if (!this.pathfindingGrid.isBlocked(cx, cy)) return { cx, cy };
         }
         return null;
     }
@@ -1713,11 +1680,11 @@ export class GameScene extends Phaser.Scene {
             }
         } else {
             const yieldMul = (building.getData('yieldMul') as number) ?? 1;
-            currentStats = `Production: x${yieldMul.toFixed(2)} (${(GameScene.GENERATOR_YIELD * yieldMul).toFixed(1)} âmes/2s)`;
+            currentStats = `Production: x${yieldMul.toFixed(2)} (${(GameConstants.GENERATOR_YIELD * yieldMul).toFixed(1)} âmes/2s)`;
 
             if (level < maxLevel) {
                 const nextYield = 1 + ((level + 1) * 0.75);
-                nextStats = `Production: x${nextYield.toFixed(2)} (${(GameScene.GENERATOR_YIELD * nextYield).toFixed(1)} âmes/2s)`;
+                nextStats = `Production: x${nextYield.toFixed(2)} (${(GameConstants.GENERATOR_YIELD * nextYield).toFixed(1)} âmes/2s)`;
             }
         }
 
