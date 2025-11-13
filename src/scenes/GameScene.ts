@@ -393,114 +393,171 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('soulShards', next);
     }
 
-    // Crée une tour et son cercle de portée au survol
+    // TOUR DE DÉFENSE DARK SOULS - Tour en pierre avec brasero de feu d'âme
     private createTower(x: number, y: number): void {
         // Container pour tous les éléments visuels de la tour
         const towerContainer = this.add.container(x, y).setDepth(10);
 
-        // === DESIGN DARK SOULS DARK FANTASY ===
-
-        // Ombre au sol (ellipse douce)
+        // === OMBRES ===
         const shadow = this.add.graphics();
-        shadow.fillStyle(0x000000, 0.25);
-        shadow.fillEllipse(0, 24, 54, 12);
+        shadow.fillStyle(0x0a0a08, 0.7);
+        shadow.fillEllipse(0, 26, 52, 14);
         towerContainer.add(shadow);
 
-        // Base en pierre sombre (fondation)
+        // === BASE EN PIERRE LARGE ===
         const base = this.add.graphics();
         base.fillStyle(0x2a2520, 1);
-        base.fillRect(-26, 18, 52, 8);
-        base.lineStyle(1, 0x1a1510, 0.8);
-        base.strokeRect(-26, 18, 52, 8);
+        base.fillRect(-24, 16, 48, 8);
+        base.lineStyle(2, 0x1a1510, 1);
+        base.strokeRect(-24, 16, 48, 8);
+        // Relief de pierre
+        base.fillStyle(0x1a1510, 0.4);
+        base.fillRect(-24, 16, 48, 2);
         towerContainer.add(base);
 
-        // Corps principal de la tour (pierre gothique sombre)
-        const body = this.add.graphics();
-        body.fillStyle(0x3a3530, 1);
-        body.fillRect(-20, -18, 40, 36);
-        // Texture de pierres
-        body.lineStyle(1, 0x2a2520, 0.6);
-        body.strokeRect(-20, -6, 40, 1);
-        body.strokeRect(-20, 6, 40, 1);
-        body.strokeRect(-10, -18, 1, 36);
-        body.strokeRect(10, -18, 1, 36);
-        // Bordure extérieure
-        body.lineStyle(2, 0x1a1510, 0.9);
-        body.strokeRect(-20, -18, 40, 36);
-        towerContainer.add(body);
+        // === TOUR CYLINDRIQUE EN PIERRE ===
+        const towerBody = this.add.graphics();
+        // Corps principal (cylindre)
+        towerBody.fillStyle(0x3a3530, 1);
+        towerBody.fillEllipse(0, -8, 28, 12);
+        towerBody.fillRect(-14, -8, 28, 24);
+        towerBody.fillEllipse(0, 16, 28, 12);
 
-        // Fissures (cracks) pour un effet usé
-        const cracks = this.add.graphics();
-        cracks.lineStyle(1, 0x2a2724, 0.7);
-        const drawCrack = (sx: number, sy: number, pts: [number, number][]) => {
-            cracks.beginPath(); cracks.moveTo(sx, sy); for (const [dx, dy] of pts) cracks.lineTo(sx + dx, sy + dy); cracks.strokePath();
-        };
-        drawCrack(-12, -10, [[-2, 4],[3, 6],[0, 10]]);
-        drawCrack(8, -2, [[-4, 4],[2, 8]]);
-        drawCrack(0, 4, [[-3, 3],[5, 10]]);
-        towerContainer.add(cracks);
+        // Bordures
+        towerBody.lineStyle(2, 0x2a2520, 1);
+        towerBody.strokeEllipse(0, -8, 28, 12);
+        towerBody.strokeRect(-14, -8, 28, 24);
 
-        // Mousse/lichen à la base
-        const moss = this.add.graphics();
-        moss.fillStyle(0x3d5a3d, 0.9);
-        moss.fillEllipse(-14, 15, 10, 6);
-        moss.fillEllipse(0, 16, 16, 7);
-        moss.fillEllipse(12, 15, 10, 6);
-        moss.lineStyle(1, 0x2c402c, 0.8); moss.strokeEllipse(0, 16, 16, 7);
-        towerContainer.add(moss);
+        // Texture de pierres (blocs)
+        towerBody.lineStyle(1, 0x2a2520, 0.6);
+        towerBody.lineBetween(-14, 0, 14, 0);
+        towerBody.lineBetween(-14, 8, 14, 8);
 
-        // Créneaux gothiques au sommet
+        // Fissures sur la tour
+        towerBody.lineStyle(1, 0x1a1510, 0.5);
+        towerBody.lineBetween(-8, -4, -6, 2);
+        towerBody.lineBetween(6, 4, 8, 10);
+        towerContainer.add(towerBody);
+
+        // === CRÉNEAUX GOTHIQUES AU SOMMET ===
         const battlements = this.add.graphics();
-        battlements.fillStyle(0x2a2520, 1);
-        // Créneaux pointus (style gothique)
+        battlements.fillStyle(0x3a3530, 1);
+
+        // 5 créneaux pointus style Dark Souls
         for (let i = 0; i < 5; i++) {
-            const bx = -18 + i * 9;
-            if (i % 2 === 0) {
-                // Créneau haut (pointe)
-                battlements.fillTriangle(bx, -18, bx + 4, -27, bx + 8, -18);
-            }
+            const bx = -12 + i * 6;
+            battlements.fillTriangle(bx, -8, bx + 3, -16, bx + 6, -8);
+            battlements.lineStyle(1, 0x2a2520, 1);
+            battlements.strokeTriangle(bx, -8, bx + 3, -16, bx + 6, -8);
         }
-        battlements.lineStyle(1, 0x1a1510, 0.8);
-        battlements.strokeRect(-20, -20, 40, 2);
         towerContainer.add(battlements);
 
-        // Fenêtre/meurtrière centrale (fente sombre)
-        const window = this.add.graphics();
-        window.fillStyle(0x0a0a08, 1);
-        window.fillRect(-3, -8, 6, 12);
-        window.lineStyle(1, 0x4a4540, 0.7);
-        window.strokeRect(-3, -8, 6, 12);
-        towerContainer.add(window);
+        // === MEURTRIÈRE (OUVERTURE DE TIR) ===
+        const embrasure = this.add.graphics();
+        embrasure.fillStyle(0x0a0a08, 1);
+        embrasure.fillRect(-3, -2, 6, 10);
+        embrasure.lineStyle(1.5, 0x2a2520, 1);
+        embrasure.strokeRect(-3, -2, 6, 10);
+        towerContainer.add(embrasure);
 
-        // Lueur mystique dans la meurtrière (idle)
-        const glow = this.add.graphics();
-        glow.fillStyle(0x6b8fa5, 0.35);
-        glow.fillRect(-2, -6, 4, 8);
-        glow.setBlendMode(Phaser.BlendModes.ADD);
+        // === BRASERO DE FEU D'ÂME AU SOMMET ===
+        const brazier = this.add.graphics();
+
+        // Coupe en métal
+        brazier.fillStyle(0x4a4a3a, 1);
+        brazier.fillEllipse(0, -18, 12, 6);
+        brazier.fillRect(-6, -18, 12, 4);
+        brazier.fillEllipse(0, -14, 12, 6);
+
+        // Bordures métalliques
+        brazier.lineStyle(1.5, 0x3a3a2a, 1);
+        brazier.strokeEllipse(0, -18, 12, 6);
+        brazier.strokeEllipse(0, -14, 12, 6);
+
+        // Pieds du brasero
+        brazier.lineStyle(2, 0x3a3a2a, 1);
+        brazier.lineBetween(-4, -14, -5, -8);
+        brazier.lineBetween(4, -14, 5, -8);
+        towerContainer.add(brazier);
+
+        // === FEU D'ÂME (FLAMMES BLEUES/ORANGES MYSTIQUES) ===
+        const soulFlame = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+
+        const drawSoulFlame = (time: number) => {
+            soulFlame.clear();
+
+            const wave = Math.sin(time * 3) * 1.5;
+            const height = 8 + Math.sin(time * 2.5) * 2;
+
+            // Flamme extérieure orange
+            soulFlame.fillStyle(0xff6633, 0.6);
+            soulFlame.fillTriangle(
+                -4 + wave, -16,
+                0, -16 - height,
+                4 + wave, -16
+            );
+
+            // Flamme intérieure orange vif
+            soulFlame.fillStyle(0xff8844, 0.7);
+            soulFlame.fillTriangle(
+                -2 + wave * 0.5, -16,
+                0, -16 - height + 2,
+                2 + wave * 0.5, -16
+            );
+
+            // Centre blanc/jaune
+            soulFlame.fillStyle(0xffcc66, 0.8);
+            soulFlame.fillCircle(wave * 0.3, -16, 2);
+        };
+
+        towerContainer.add(soulFlame);
+
+        // === LUEUR DU FEU D'ÂME ===
+        const glow = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+        const drawGlow = (intensity: number) => {
+            glow.clear();
+            glow.fillStyle(0xff6633, 0.3 + intensity * 0.2);
+            glow.fillCircle(0, -16, 14);
+            glow.fillStyle(0xff8844, 0.2 + intensity * 0.15);
+            glow.fillCircle(0, -16, 18);
+        };
         towerContainer.add(glow);
-        this.tweens.add({ targets: glow, alpha: { from: 0.35, to: 0.65 }, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-        // Torches latérales (flammes + fumée)
-        const flameKey = ensureFlameTexture(this);
-        const smokeKey = ensureSmokeTexture(this);
-        const torchLeft = this.add.particles(0, 0, flameKey, {
-            x: -16, y: -10, lifespan: { min: 300, max: 700 }, scale: { start: 0.18, end: 0 }, alpha: { start: 0.9, end: 0 }, speedY: { min: -20, max: -50 }, speedX: { min: -8, max: 8 }, quantity: 1, frequency: 80, blendMode: 'ADD'
+        // Animation du feu d'âme
+        const fireTimer = this.time.addEvent({
+            delay: 16,
+            loop: true,
+            callback: () => {
+                if (!towerContainer.scene) return;
+                const time = Date.now() * 0.001;
+                drawSoulFlame(time);
+                const intensity = Math.sin(time * 2) * 0.5 + 0.5;
+                drawGlow(intensity);
+            }
         });
-        const torchRight = this.add.particles(0, 0, flameKey, {
-            x: 16, y: -10, lifespan: { min: 300, max: 700 }, scale: { start: 0.18, end: 0 }, alpha: { start: 0.9, end: 0 }, speedY: { min: -20, max: -50 }, speedX: { min: -8, max: 8 }, quantity: 1, frequency: 80, blendMode: 'ADD'
-        });
-        const smokeLeft = this.add.particles(0, 0, smokeKey, {
-            x: -16, y: -16, lifespan: { min: 600, max: 1200 }, scale: { start: 0.5, end: 1.0 }, alpha: { start: 0.3, end: 0 }, speedY: { min: -8, max: -16 }, speedX: { min: -4, max: 4 }, quantity: 1, frequency: 140
-        });
-        const smokeRight = this.add.particles(0, 0, smokeKey, {
-            x: 16, y: -16, lifespan: { min: 600, max: 1200 }, scale: { start: 0.5, end: 1.0 }, alpha: { start: 0.3, end: 0 }, speedY: { min: -8, max: -16 }, speedX: { min: -4, max: 4 }, quantity: 1, frequency: 140
-        });
-        towerContainer.add([torchLeft, torchRight, smokeLeft, smokeRight]);
+
+        // === CRÂNES DÉCORATIFS (Dark Souls style) ===
+        const skulls = this.add.graphics();
+        skulls.fillStyle(0x8a8a7a, 0.9);
+
+        // Crâne gauche
+        skulls.fillEllipse(-12, 2, 4, 3.5);
+        skulls.fillStyle(0x0a0a08, 1);
+        skulls.fillCircle(-13, 1.5, 0.6);
+        skulls.fillCircle(-11, 1.5, 0.6);
+
+        // Crâne droite
+        skulls.fillStyle(0x8a8a7a, 0.9);
+        skulls.fillEllipse(12, 2, 4, 3.5);
+        skulls.fillStyle(0x0a0a08, 1);
+        skulls.fillCircle(11, 1.5, 0.6);
+        skulls.fillCircle(13, 1.5, 0.6);
+        towerContainer.add(skulls);
 
         // Bannière (apparaitra aux upgrades élevés)
         const banner = this.add.graphics();
         banner.setVisible(false);
-        towerContainer.addAt(banner, 1); // derrière corps/fenêtre
+        towerContainer.add(banner);
 
         // Rectangle invisible pour les interactions (hitbox)
         const tower = this.add.rectangle(0, 0, 48, 48, 0x000000, 0).setDepth(10);
@@ -516,7 +573,7 @@ export class GameScene extends Phaser.Scene {
         tower.setData('container', towerContainer);
         tower.setData('glow', glow);
         tower.setData('banner', banner);
-        tower.setData('torches', [torchLeft, torchRight, smokeLeft, smokeRight]);
+        tower.setData('fireTimer', fireTimer);
         // IMPORTANT: Stocker les coordonnées absolues de la tour (du container)
         tower.setData('worldX', x);
         tower.setData('worldY', y);
@@ -539,6 +596,8 @@ export class GameScene extends Phaser.Scene {
 
         tower.once(Phaser.GameObjects.Events.DESTROY, () => {
             rangeGfx.destroy();
+            const fTimer = tower.getData('fireTimer') as Phaser.Time.TimerEvent | undefined;
+            if (fTimer) fTimer.remove(false);
             // Laisser le container détruire ses propres enfants pour éviter les doubles-destructions
             const container = tower.getData('container') as Phaser.GameObjects.Container | undefined;
             if (container && container.active) {
@@ -549,39 +608,428 @@ export class GameScene extends Phaser.Scene {
 
     // Crée un mur (bloquant pour le pathfinding)
     private createWall(x: number, y: number): void {
-        const wall = this.add.rectangle(x, y, 48, 48, 0x2b2a28).setDepth(9).setStrokeStyle(1, 0x3e372d, 0.5);
+        // Container principal pour le mur
+        const wallContainer = this.add.container(x, y).setDepth(9);
+
+        // Mur de base en pierre (rectangle invisible pour les collisions)
+        const wall = this.add.rectangle(0, 0, 48, 48, 0x2b2a28, 0)
+            .setStrokeStyle(0, 0x000000, 0);
+
+        // === FOND ET STRUCTURE ===
+        const wallBase = this.add.graphics();
+
+        // Fond principal - pierre grise foncée avec dégradé
+        wallBase.fillStyle(0x3a3530, 1);
+        wallBase.fillRect(-24, -24, 48, 48);
+
+        // Ombre intérieure pour la profondeur
+        wallBase.fillStyle(0x1a1510, 0.3);
+        wallBase.fillRect(-24, -24, 48, 4); // Haut
+        wallBase.fillRect(-24, -24, 4, 48); // Gauche
+
+        // Lumière sur les bords droits
+        wallBase.fillStyle(0x5a5550, 0.2);
+        wallBase.fillRect(20, -24, 4, 48); // Droite
+        wallBase.fillRect(-24, 20, 48, 4); // Bas
+
+        // Bordure extérieure épaisse et sombre
+        wallBase.lineStyle(2, 0x1a1510, 1);
+        wallBase.strokeRect(-24, -24, 48, 48);
+
+        // === TEXTURE DE PIERRES DÉTAILLÉE ===
+        const stones = this.add.graphics();
+
+        // Lignes principales pour les blocs de pierre
+        stones.lineStyle(1.5, 0x2a2520, 0.9);
+
+        // Rangées horizontales de pierres
+        stones.lineBetween(-24, -8, 24, -8);
+        stones.lineBetween(-24, 8, 24, 8);
+
+        // Colonnes verticales alternées (effet briques)
+        stones.lineBetween(-8, -24, -8, -8);
+        stones.lineBetween(8, -8, 8, 8);
+        stones.lineBetween(-8, 8, -8, 24);
+
+        // Blocs de pierre individuels avec bordures
+        stones.lineStyle(1, 0x4a4540, 0.5);
+        stones.strokeRect(-22, -22, 14, 14);
+        stones.strokeRect(8, -22, 14, 14);
+        stones.strokeRect(-22, -6, 14, 14);
+        stones.strokeRect(8, -6, 14, 14);
+        stones.strokeRect(-22, 10, 14, 14);
+        stones.strokeRect(8, 10, 14, 14);
+
+        // === FISSURES ET DÉTAILS ===
+        const cracks = this.add.graphics();
+        cracks.lineStyle(1, 0x1a1510, 0.6);
+
+        // Fissures diagonales
+        cracks.lineBetween(-18, -15, -12, -10);
+        cracks.lineBetween(-12, -10, -10, -6);
+        cracks.lineBetween(12, 5, 16, 10);
+        cracks.lineBetween(16, 10, 18, 14);
+        cracks.lineBetween(-15, 12, -10, 16);
+
+        // Petits impacts
+        cracks.fillStyle(0x0a0a08, 0.8);
+        cracks.fillCircle(-5, -14, 1.5);
+        cracks.fillCircle(10, 2, 1);
+        cracks.fillCircle(-12, 18, 1.2);
+        cracks.fillCircle(15, -8, 1);
+
+        // === CRÉNEAUX GOTHIQUES ===
+        const battlements = this.add.graphics();
+
+        // Base des créneaux
+        battlements.fillStyle(0x4a4540, 1);
+        battlements.fillRect(-24, -26, 48, 2);
+
+        // Créneaux carrés avec ombres
+        const crenelWidth = 9;
+        const spacing = 12;
+        for (let i = 0; i < 4; i++) {
+            const cx = -19 + i * spacing;
+            if (i % 2 === 0) {
+                // Créneau haut
+                battlements.fillStyle(0x4a4540, 1);
+                battlements.fillRect(cx, -28, crenelWidth, 4);
+
+                // Ombre du créneau
+                battlements.fillStyle(0x1a1510, 0.6);
+                battlements.fillRect(cx, -28, 2, 4);
+
+                // Lumière sur le créneau
+                battlements.fillStyle(0x6a6560, 0.4);
+                battlements.fillRect(cx + crenelWidth - 2, -28, 2, 4);
+            }
+        }
+
+        // Meurtrières (fentes verticales étroites)
+        const slits = this.add.graphics();
+        slits.fillStyle(0x0a0a08, 1);
+        slits.fillRect(-2, -12, 4, 16); // Fente centrale
+
+        // Bordure de la meurtrière
+        slits.lineStyle(1, 0x2a2520, 0.8);
+        slits.strokeRect(-2, -12, 4, 16);
+
+        // Ombrage intérieur de la meurtrière
+        slits.fillStyle(0x1a1510, 0.5);
+        slits.fillRect(-1, -12, 1, 16);
+
+        // === EFFET DE PROFONDEUR ===
+        const depth = this.add.graphics();
+
+        // Ombre portée sous les créneaux
+        depth.fillStyle(0x0a0a08, 0.4);
+        depth.fillRect(-24, -24, 48, 2);
+
+        // Relief sur les bords des pierres
+        depth.lineStyle(1, 0x6a6560, 0.3);
+        depth.lineBetween(-23, -7, 23, -7);
+        depth.lineBetween(-23, 9, 23, 9);
+
+        // === MOUSSES ET VIEILLISSEMENT ===
+        const aging = this.add.graphics();
+
+        // Taches de mousse/altération
+        aging.fillStyle(0x2a3520, 0.3);
+        aging.fillCircle(-16, -18, 3);
+        aging.fillCircle(14, 16, 2.5);
+        aging.fillCircle(-10, 12, 2);
+
+        // Traces d'usure
+        aging.fillStyle(0x4a4540, 0.2);
+        aging.fillRect(-20, 0, 8, 2);
+        aging.fillRect(12, -16, 6, 2);
+
+        // === SYMBOLE DE PROTECTION (BOUCLIER) ===
+        const shieldSymbol = this.add.graphics();
+
+        // Bouclier médiéval au centre du mur
+        shieldSymbol.fillStyle(0x5a6a7a, 0.9);
+        shieldSymbol.fillRect(-8, -10, 16, 14);
+        shieldSymbol.fillTriangle(-8, 4, 0, 10, 8, 4);
+
+        // Bordure du bouclier
+        shieldSymbol.lineStyle(2, 0x8a9aaa, 0.9);
+        shieldSymbol.strokeRect(-8, -10, 16, 14);
+        shieldSymbol.strokeTriangle(-8, 4, 0, 10, 8, 4);
+
+        // Croix sur le bouclier (symbole de défense)
+        shieldSymbol.lineStyle(2.5, 0xffa544, 0.8);
+        shieldSymbol.lineBetween(0, -8, 0, 6);
+        shieldSymbol.lineBetween(-6, -2, 6, -2);
+
+        // Boulons décoratifs
+        shieldSymbol.fillStyle(0x6a7a8a, 1);
+        shieldSymbol.fillCircle(-5, -7, 1.5);
+        shieldSymbol.fillCircle(5, -7, 1.5);
+        shieldSymbol.fillCircle(-5, 1, 1.5);
+        shieldSymbol.fillCircle(5, 1, 1.5);
+
+        // Ajouter tous les éléments au container dans le bon ordre
+        wallContainer.add([wallBase, stones, cracks, depth, battlements, slits, aging, shieldSymbol, wall]);
+
         wall.setData('hp', 200);
         wall.setData('maxHp', 200);
+        wall.setData('container', wallContainer);
+
         this.walls.add(wall);
         attachHealthBar(this, wall);
+
         wall.once(Phaser.GameObjects.Events.DESTROY, () => {
-            // Déjà détruit: retirer du groupe sans toucher au display list
+            // Détruire le container visuel
+            if (wallContainer && wallContainer.scene) {
+                wallContainer.destroy();
+            }
+            // Retirer du groupe sans toucher au display list
             if (this.walls.contains(wall)) this.walls.remove(wall, false, false);
             this.recomputeGrid();
             this.recomputeAllEnemyPaths();
         });
+
         // Recompute dès placement
         this.recomputeGrid();
         this.recomputeAllEnemyPaths();
     }
 
-    // Générateur d'éclats
+    // FAILLE D'ÂMES - Fissure dans le sol libérant des âmes spectrales
     private createGenerator(x: number, y: number): void {
-        const gen = this.add.rectangle(x, y, 48, 48, 0x7b6a2e).setDepth(9).setStrokeStyle(1, 0x3e372d, 0.5);
+        // Container principal
+        const genContainer = this.add.container(x, y).setDepth(9);
+
+        // Rectangle invisible pour les collisions
+        const gen = this.add.rectangle(0, 0, 48, 48, 0x7b6a2e, 0)
+            .setStrokeStyle(0, 0x000000, 0);
+
+        // === OMBRES ===
+        const shadows = this.add.graphics();
+        shadows.fillStyle(0x0a0a08, 0.7);
+        shadows.fillEllipse(0, 26, 50, 12);
+
+        // === SOL CRAQUELÉ AUTOUR DE LA FAILLE ===
+        const ground = this.add.graphics();
+        ground.fillStyle(0x2a2520, 1);
+        ground.fillEllipse(0, 18, 46, 14);
+
+        // Fissures rayonnantes depuis le centre
+        ground.lineStyle(2, 0x1a1510, 1);
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const startDist = 8;
+            const endDist = 22;
+            const sx = Math.cos(angle) * startDist;
+            const sy = Math.sin(angle) * startDist + 18;
+            const ex = Math.cos(angle) * endDist;
+            const ey = Math.sin(angle) * endDist + 18;
+            ground.lineBetween(sx, sy, ex, ey);
+        }
+
+        // Petites fissures secondaires
+        ground.lineStyle(1, 0x1a1510, 0.7);
+        ground.lineBetween(-12, 14, -8, 10);
+        ground.lineBetween(10, 16, 14, 12);
+        ground.lineBetween(-6, 22, -2, 24);
+        ground.lineBetween(8, 20, 12, 22);
+
+        // === FAILLE CENTRALE (GOUFFRE) ===
+        const rift = this.add.graphics();
+
+        // Forme irrégulière de la faille (trou dans le sol)
+        rift.fillStyle(0x0a0a18, 1);
+        rift.beginPath();
+        rift.moveTo(0, -4);
+        rift.lineTo(-10, 2);
+        rift.lineTo(-8, 10);
+        rift.lineTo(0, 14);
+        rift.lineTo(8, 10);
+        rift.lineTo(10, 2);
+        rift.closePath();
+        rift.fillPath();
+
+        // Bordure de la faille (pierre brisée)
+        rift.lineStyle(2, 0x1a1510, 1);
+        rift.strokePath();
+
+        // Profondeur (dégradé vers le noir)
+        rift.fillStyle(0x1a1a28, 0.8);
+        rift.beginPath();
+        rift.moveTo(0, 0);
+        rift.lineTo(-6, 4);
+        rift.lineTo(-4, 8);
+        rift.lineTo(0, 10);
+        rift.lineTo(4, 8);
+        rift.lineTo(6, 4);
+        rift.closePath();
+        rift.fillPath();
+
+        // === LUEUR DE LA FAILLE (ORANGE/ROUGE SOMBRE) ===
+        const riftGlow = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+        const drawRiftGlow = (intensity: number) => {
+            riftGlow.clear();
+
+            // Lueur rouge/orange sortant du gouffre (comme de la lave)
+            riftGlow.fillStyle(0xaa4422, 0.3 + intensity * 0.25);
+            riftGlow.beginPath();
+            riftGlow.moveTo(0, -4);
+            riftGlow.lineTo(-10, 2);
+            riftGlow.lineTo(-8, 10);
+            riftGlow.lineTo(0, 14);
+            riftGlow.lineTo(8, 10);
+            riftGlow.lineTo(10, 2);
+            riftGlow.closePath();
+            riftGlow.fillPath();
+
+            // Halo extérieur orange
+            riftGlow.fillStyle(0xcc6633, 0.15 + intensity * 0.15);
+            riftGlow.fillEllipse(0, 5, 20, 18);
+        };
+
+        // === ÂMES SPECTRALES S'ÉCHAPPANT ===
+        const souls = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+        const soulParticles: Array<{x: number, y: number, vy: number, vx: number, life: number, size: number, phase: number}> = [];
+
+        // Initialiser des âmes
+        for (let i = 0; i < 10; i++) {
+            soulParticles.push({
+                x: (Math.random() - 0.5) * 12,
+                y: 5 + Math.random() * 8,
+                vy: -0.4 - Math.random() * 0.5,
+                vx: (Math.random() - 0.5) * 0.3,
+                life: Math.random(),
+                size: 2 + Math.random() * 3,
+                phase: Math.random() * Math.PI * 2
+            });
+        }
+
+        const drawSouls = (time: number) => {
+            souls.clear();
+
+            soulParticles.forEach((soul) => {
+                soul.y += soul.vy;
+                soul.x += soul.vx + Math.sin(time * 2 + soul.phase) * 0.2;
+                soul.life -= 0.004;
+
+                if (soul.life <= 0 || soul.y < -30) {
+                    soul.x = (Math.random() - 0.5) * 12;
+                    soul.y = 5 + Math.random() * 8;
+                    soul.life = 1;
+                    soul.phase = Math.random() * Math.PI * 2;
+                }
+
+                const alpha = soul.life * 0.9;
+                const flicker = Math.sin(time * 5 + soul.phase) * 0.2 + 0.8;
+
+                // Forme fantomatique d'âme (blanc spectral)
+                souls.fillStyle(0xdddddd, alpha * flicker * 0.7);
+                souls.fillCircle(soul.x, soul.y, soul.size);
+
+                // Traînée spectrale (gris pâle)
+                souls.fillStyle(0xaaaaaa, alpha * flicker * 0.4);
+                souls.fillCircle(soul.x, soul.y + 2, soul.size * 0.7);
+
+                // Point central lumineux (blanc pur)
+                souls.fillStyle(0xffffff, alpha * flicker * 0.9);
+                souls.fillCircle(soul.x, soul.y, soul.size * 0.4);
+            });
+        };
+
+        gen.setData('soulTime', 0);
+
+
+        // === PIERRES FLOTTANTES (GRAVITÉ INVERSÉE) ===
+        const floatingStones = this.add.graphics();
+        const stones: Array<{x: number, y: number, size: number, vy: number, amplitude: number, phase: number}> = [];
+
+        for (let i = 0; i < 5; i++) {
+            stones.push({
+                x: (Math.random() - 0.5) * 20,
+                y: 10 + Math.random() * 10,
+                size: 2 + Math.random() * 3,
+                vy: -0.1 - Math.random() * 0.15,
+                amplitude: 1 + Math.random() * 2,
+                phase: Math.random() * Math.PI * 2
+            });
+        }
+
+        const drawStones = (time: number) => {
+            floatingStones.clear();
+
+            stones.forEach((stone) => {
+                stone.y += stone.vy;
+                const wobbleX = Math.sin(time + stone.phase) * stone.amplitude;
+
+                if (stone.y < -20) {
+                    stone.y = 20;
+                    stone.x = (Math.random() - 0.5) * 20;
+                }
+
+                // Pierre sombre flottante
+                floatingStones.fillStyle(0x3a3530, 0.9);
+                floatingStones.fillCircle(stone.x + wobbleX, stone.y, stone.size);
+
+                floatingStones.lineStyle(0.5, 0x2a2520, 1);
+                floatingStones.strokeCircle(stone.x + wobbleX, stone.y, stone.size);
+            });
+        };
+
+        // === ANIMATION CONTINUE ===
+        const riftTimer = this.time.addEvent({
+            delay: 16,
+            loop: true,
+            callback: () => {
+                if (!gen.scene) return;
+
+                const time = gen.getData('soulTime') as number || 0;
+                gen.setData('soulTime', time + 0.016);
+
+                const intensity = Math.sin(time * 1.5) * 0.5 + 0.5;
+
+                drawRiftGlow(intensity);
+                drawSouls(time);
+                drawStones(time);
+            }
+        });
+
+        // === COMPOSITION FINALE ===
+        genContainer.add([shadows, ground, rift, riftGlow, souls, floatingStones, gen]);
+
         gen.setData('hp', 120);
         gen.setData('maxHp', 120);
-        gen.setData('upgradeLevel', 0); // Niveau d'upgrade (0-3)
-        gen.setData('yieldMul', 1); // Multiplicateur de production
+        gen.setData('upgradeLevel', 0);
+        gen.setData('yieldMul', 1);
+        gen.setData('container', genContainer);
+        gen.setData('riftTimer', riftTimer);
+
         this.generators.add(gen);
         attachHealthBar(this, gen);
         gen.setInteractive({ useHandCursor: true });
 
         const baseYield = GameConstants.GENERATOR_YIELD;
-        const timer = this.time.addEvent({ delay: GameConstants.GENERATOR_TICK_MS, loop: true, callback: () => {
-            const mul = (gen.getData('yieldMul') as number) ?? 1;
-            this.addShards(baseYield * mul);
-        }});
-        gen.setData('genTimer', timer);
+        const genTimer = this.time.addEvent({
+            delay: GameConstants.GENERATOR_TICK_MS,
+            loop: true,
+            callback: () => {
+                const mul = (gen.getData('yieldMul') as number) ?? 1;
+                this.addShards(baseYield * mul);
+
+                // Effet visuel lors de la génération d'âmes (flash de la lueur)
+                if (riftGlow && riftGlow.scene) {
+                    this.tweens.add({
+                        targets: {},
+                        duration: 300,
+                        ease: 'Quad.easeOut',
+                        onUpdate: (tween) => {
+                            const flash = 1 - tween.progress;
+                            drawRiftGlow(0.5 + flash * 0.5);
+                        }
+                    });
+                }
+            }
+        });
+        gen.setData('genTimer', genTimer);
 
         // Clic pour ouvrir le menu d'upgrade
         gen.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
@@ -589,30 +1037,493 @@ export class GameScene extends Phaser.Scene {
             this.showUpgradeMenu(gen, 'generator');
         });
 
-        gen.once(Phaser.GameObjects.Events.DESTROY, () => { timer.remove(false); this.generators.remove(gen, false, false); });
+        gen.once(Phaser.GameObjects.Events.DESTROY, () => {
+            genTimer.remove(false);
+            riftTimer.remove(false);
+            if (genContainer && genContainer.scene) {
+                genContainer.destroy();
+            }
+            this.generators.remove(gen, false, false);
+        });
     }
 
-    // Feu de camp (aura de soin)
+    // Feu de camp (aura de soin) - Style Bonfire Dark Souls
     private createCampfire(x: number, y: number): void {
-        const fire = this.add.rectangle(x, y, 48, 48, 0x8d4b2a).setDepth(9).setStrokeStyle(1, 0x3e372d, 0.5);
-        fire.setData('hp', 100);
-        fire.setData('maxHp', 100);
-        this.campfires.add(fire);
-        attachHealthBar(this, fire);
-        // Aura additive, légère pulsation
+        // Container principal
+        const fireContainer = this.add.container(x, y).setDepth(9);
+
+        // Rectangle invisible pour les collisions
+        const fire = this.add.rectangle(0, 0, 48, 48, 0x8d4b2a, 0)
+            .setStrokeStyle(0, 0x000000, 0);
+
+        // === CERCLE DE CENDRES LARGE ===
+        const ashCircle = this.add.graphics();
+
+        // Cercle de cendres étendu
+        ashCircle.fillStyle(0x1a1510, 1);
+        ashCircle.fillEllipse(0, 22, 42, 14);
+
+        // Cendres plus claires au centre
+        ashCircle.fillStyle(0x2a2520, 0.8);
+        ashCircle.fillEllipse(0, 22, 34, 11);
+
+        // Tas de cendres irrégulier
+        ashCircle.fillStyle(0x3a3530, 0.6);
+        ashCircle.fillEllipse(-4, 20, 28, 10);
+        ashCircle.fillEllipse(6, 21, 24, 8);
+
+        // === BRAISES ROUGEOYANTES ===
+        const embers = this.add.graphics();
+
+        // Braises dispersées dans les cendres
+        embers.fillStyle(0xff4422, 0.8);
+        embers.fillCircle(-10, 19, 2);
+        embers.fillCircle(8, 20, 1.8);
+        embers.fillCircle(-2, 21, 2.2);
+        embers.fillCircle(14, 19, 1.5);
+        embers.fillCircle(-16, 21, 1.3);
+
+        // Lueur orange autour des braises
+        embers.fillStyle(0xff8844, 0.5);
+        embers.fillCircle(-10, 19, 3);
+        embers.fillCircle(8, 20, 2.8);
+        embers.fillCircle(-2, 21, 3.5);
+
+        // Braises plus petites
+        embers.fillStyle(0xff6633, 0.6);
+        embers.fillCircle(4, 22, 1);
+        embers.fillCircle(-6, 20, 0.8);
+        embers.fillCircle(11, 21, 0.9);
+
+        // === BOIS CARBONISÉ ===
+        const wood = this.add.graphics();
+
+        // Bûches noircies éparpillées
+        wood.fillStyle(0x1a1510, 1);
+
+        // Bûche horizontale gauche
+        wood.fillRect(-18, 12, 16, 5);
+        wood.lineStyle(1, 0x0a0a08, 1);
+        wood.strokeRect(-18, 12, 16, 5);
+
+        // Bûche horizontale droite
+        wood.fillRect(4, 10, 14, 5);
+        wood.strokeRect(4, 10, 14, 5);
+
+        // Bûche en diagonale
+        wood.save();
+        wood.translateCanvas(0, 8);
+        wood.rotateCanvas(0.3);
+        wood.fillRect(-8, 0, 16, 4);
+        wood.strokeRect(-8, 0, 16, 4);
+        wood.restore();
+
+        // Texture du bois brûlé (fissures)
+        wood.lineStyle(1, 0x2a1a0a, 0.4);
+        wood.lineBetween(-16, 13, -12, 15);
+        wood.lineBetween(6, 11, 10, 13);
+        wood.lineBetween(-14, 14, -10, 16);
+
+        // === ÉPÉE SPIRALE EMBLÉMATIQUE (style Dark Souls) ===
+        const sword = this.add.graphics();
+
+        // Lame de l'épée (longue et élancée)
+        sword.fillStyle(0x5a6a7a, 1);
+
+        // Lame principale (forme effilée)
+        sword.beginPath();
+        sword.moveTo(0, -36); // Pointe
+        sword.lineTo(-2.5, -28);
+        sword.lineTo(-2, 2);
+        sword.lineTo(2, 2);
+        sword.lineTo(2.5, -28);
+        sword.closePath();
+        sword.fillPath();
+
+        // Reflets métalliques sur la lame
+        sword.fillStyle(0x8a9aaa, 0.6);
+        sword.fillRect(-1.5, -34, 1, 32);
+        sword.fillRect(0.5, -32, 0.8, 28);
+
+        // Entailles et dégâts sur la lame
+        sword.fillStyle(0x3a4a5a, 0.7);
+        sword.fillRect(-2, -24, 4, 1);
+        sword.fillRect(-1.5, -18, 3, 0.8);
+        sword.fillRect(-2, -12, 4, 1);
+
+        // Bordure sombre de la lame
+        sword.lineStyle(1.5, 0x3a4a5a, 1);
+        sword.strokePath();
+
+        // Garde de l'épée (croix gothique)
+        sword.fillStyle(0x4a4a3a, 1);
+        sword.fillRect(-10, 0, 20, 4);
+        sword.fillRect(-2, -4, 4, 8);
+
+        // Ornements sur la garde
+        sword.fillStyle(0x6a6a5a, 0.8);
+        sword.fillCircle(-8, 2, 1.5);
+        sword.fillCircle(8, 2, 1.5);
+
+        // Bordure de la garde
+        sword.lineStyle(1, 0x2a2a1a, 1);
+        sword.strokeRect(-10, 0, 20, 4);
+
+        // Poignée enroulée
+        sword.fillStyle(0x2a1a0a, 1);
+        sword.fillRect(-2.5, 4, 5, 10);
+
+        // Bandages sur la poignée
+        sword.fillStyle(0x4a3a2a, 0.6);
+        for (let i = 0; i < 4; i++) {
+            sword.fillRect(-2.5, 5 + i * 2.5, 5, 1);
+        }
+
+        // Pommeau rond
+        sword.fillStyle(0x5a4a3a, 1);
+        sword.fillCircle(0, 15, 3.5);
+
+        // Détail du pommeau
+        sword.fillStyle(0x3a2a1a, 0.8);
+        sword.fillCircle(0, 15, 2);
+        sword.lineStyle(1.5, 0x2a1a0a, 1);
+        sword.strokeCircle(0, 15, 3.5);
+
+        // === FLAMMES MAJESTUEUSES (style Dark Souls) ===
+        const flames = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+
+        const drawFlames = (time: number) => {
+            flames.clear();
+
+            // Flamme centrale massive qui enveloppe l'épée
+            const centerWave = Math.sin(time * 2) * 3;
+            const centerHeight = 28 + Math.sin(time * 1.5) * 6;
+            const wave1 = Math.sin(time * 2.5) * 2;
+            const wave2 = Math.sin(time * 3) * 1.5;
+
+            // Flamme extérieure rouge-orange (très large) - forme organique
+            flames.fillStyle(0xff4422, 0.5);
+            flames.fillTriangle(
+                -16 + centerWave, 8,
+                -6 + wave1, -centerHeight,
+                0, -centerHeight - 4
+            );
+            flames.fillTriangle(
+                0, -centerHeight - 4,
+                6 - wave1, -centerHeight,
+                16 - centerWave, 8
+            );
+            flames.fillTriangle(
+                -16 + centerWave, 8,
+                -10 + wave2, -centerHeight * 0.6,
+                0, 8
+            );
+            flames.fillTriangle(
+                0, 8,
+                10 - wave2, -centerHeight * 0.6,
+                16 - centerWave, 8
+            );
+
+            // Flamme intermédiaire orange vif
+            flames.fillStyle(0xff7733, 0.6);
+            flames.fillTriangle(
+                -12 + centerWave, 8,
+                -4 + wave1, -centerHeight + 4,
+                0, -centerHeight + 2
+            );
+            flames.fillTriangle(
+                0, -centerHeight + 2,
+                4 - wave1, -centerHeight + 4,
+                12 - centerWave, 8
+            );
+            flames.fillTriangle(
+                -12 + centerWave, 8,
+                -6 + wave2, -centerHeight * 0.7,
+                0, 8
+            );
+            flames.fillTriangle(
+                0, 8,
+                6 - wave2, -centerHeight * 0.7,
+                12 - centerWave, 8
+            );
+
+            // Flamme interne jaune-orangé
+            flames.fillStyle(0xffaa44, 0.7);
+            flames.fillTriangle(
+                -8 + centerWave * 0.5, 8,
+                -3 + wave1, -centerHeight + 8,
+                0, -centerHeight + 6
+            );
+            flames.fillTriangle(
+                0, -centerHeight + 6,
+                3 - wave1, -centerHeight + 8,
+                8 - centerWave * 0.5, 8
+            );
+            flames.fillTriangle(
+                -8 + centerWave * 0.5, 8,
+                -4 + wave2, -centerHeight * 0.75,
+                0, 6
+            );
+            flames.fillTriangle(
+                0, 6,
+                4 - wave2, -centerHeight * 0.75,
+                8 - centerWave * 0.5, 8
+            );
+
+            // Coeur jaune brillant
+            flames.fillStyle(0xffdd66, 0.8);
+            flames.fillTriangle(
+                -5 + centerWave * 0.3, 8,
+                -2 + wave1 * 0.5, -centerHeight + 12,
+                0, -centerHeight + 10
+            );
+            flames.fillTriangle(
+                0, -centerHeight + 10,
+                2 - wave1 * 0.5, -centerHeight + 12,
+                5 - centerWave * 0.3, 8
+            );
+
+            // Centre blanc incandescent
+            flames.fillStyle(0xffffff, 0.6);
+            flames.fillCircle(centerWave * 0.3, 4, 4 + Math.sin(time * 3));
+            flames.fillCircle(centerWave * 0.3, 0, 3 + Math.sin(time * 4) * 0.5);
+            flames.fillCircle(centerWave * 0.3, -4, 2);
+
+            // Petites flammes secondaires qui dansent autour
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2 + time;
+                const dist = 14 + Math.sin(time * 2 + i) * 4;
+                const fx = Math.cos(angle) * dist;
+                const fy = Math.sin(angle) * dist - 4;
+                const fHeight = 10 + Math.sin(time * 3 + i) * 4;
+                const fWave = Math.sin(time * 2 + i * 0.5) * 2;
+
+                // Petite flamme orange
+                flames.fillStyle(0xff7733, 0.6);
+                flames.fillTriangle(
+                    fx - 3 + fWave, fy + 4,
+                    fx + fWave * 0.5, fy - fHeight,
+                    fx + 3 + fWave, fy + 4
+                );
+
+                // Centre jaune
+                flames.fillStyle(0xffcc66, 0.7);
+                flames.fillTriangle(
+                    fx - 2 + fWave, fy + 4,
+                    fx + fWave * 0.5, fy - fHeight + 4,
+                    fx + 2 + fWave, fy + 4
+                );
+
+                // Coeur blanc
+                flames.fillStyle(0xffffff, 0.5);
+                flames.fillTriangle(
+                    fx - 1 + fWave, fy + 4,
+                    fx + fWave * 0.5, fy - fHeight + 6,
+                    fx + 1 + fWave, fy + 4
+                );
+            }
+        };
+
+        fire.setData('flameTime', 0);
+        const flameTimer = this.time.addEvent({
+            delay: 16,
+            loop: true,
+            callback: () => {
+                if (!fire.scene) return;
+                const time = fire.getData('flameTime') as number;
+                fire.setData('flameTime', time + 0.016);
+                drawFlames(time);
+            }
+        });
+
+        // === AURA DE CHALEUR INTENSE ===
         const aura = this.add.graphics({ x, y }).setDepth(8).setBlendMode(Phaser.BlendModes.ADD);
         const drawAura = (alpha: number, radius: number) => {
             aura.clear();
-            aura.fillStyle(0xffa45a, alpha);
-            aura.fillCircle(0, 0, radius);
-            aura.lineStyle(1, 0xffdd99, Math.min(1, alpha + 0.1));
-            aura.strokeCircle(0, 0, radius + 4);
+
+            // Aura rouge-orange profonde (chaleur intense)
+            aura.fillStyle(0xff6633, alpha * 0.6);
+            aura.fillCircle(0, 4, radius + 8);
+
+            // Aura orange chaleureuse
+            aura.fillStyle(0xff8844, alpha * 0.7);
+            aura.fillCircle(0, 4, radius);
+
+            // Cercle intérieur jaune lumineux
+            aura.fillStyle(0xffaa55, alpha * 0.8);
+            aura.fillCircle(0, 4, radius * 0.7);
+
+            // Centre très lumineux
+            aura.fillStyle(0xffcc77, alpha * 0.9);
+            aura.fillCircle(0, 4, radius * 0.4);
+
+            // Contours ondulants
+            aura.lineStyle(1.5, 0xffdd99, Math.min(1, alpha + 0.15));
+            aura.strokeCircle(0, 4, radius + 4);
+            aura.strokeCircle(0, 4, radius * 0.6);
         };
-        drawAura(0.18, 22);
-        this.tweens.add({ targets: aura, duration: 900, yoyo: true, repeat: -1, onUpdate: (tw) => {
-            const v = tw.progress; drawAura(0.12 + 0.08 * (1 - Math.abs(0.5 - v) * 2), 20 + 4 * v);
-        }});
-        fire.once(Phaser.GameObjects.Events.DESTROY, () => { aura.destroy(); this.campfires.remove(fire, false, false); });
+
+        drawAura(0.2, 26);
+        this.tweens.add({
+            targets: aura,
+            duration: 1200,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+            onUpdate: (tw) => {
+                const v = tw.progress;
+                const pulse = Math.sin(v * Math.PI);
+                drawAura(0.15 + 0.1 * pulse, 24 + 6 * pulse);
+            }
+        });
+
+        // === PARTICULES DE BRAISES MONTANTES (plus nombreuses) ===
+        const embersGraphics = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+        const emberData: Array<{x: number, y: number, vx: number, vy: number, life: number, size: number, rotation: number}> = [];
+
+        // Initialiser beaucoup de braises
+        for (let i = 0; i < 24; i++) {
+            emberData.push({
+                x: (Math.random() - 0.5) * 24,
+                y: 8 + Math.random() * 12,
+                vx: (Math.random() - 0.5) * 0.6,
+                vy: -0.4 - Math.random() * 0.8,
+                life: Math.random(),
+                size: 0.6 + Math.random() * 1.8,
+                rotation: Math.random() * Math.PI * 2
+            });
+        }
+
+        const updateEmbers = () => {
+            if (!fire.scene) return;
+
+            embersGraphics.clear();
+
+            emberData.forEach((ember) => {
+                // Mouvement ascendant avec turbulence
+                ember.x += ember.vx;
+                ember.y += ember.vy;
+                ember.vx += (Math.random() - 0.5) * 0.1; // Turbulence
+                ember.vy -= 0.01; // Accélération vers le haut
+                ember.life -= 0.003;
+                ember.rotation += 0.05;
+
+                // Réinitialiser si mort
+                if (ember.life <= 0 || ember.y < -36) {
+                    ember.x = (Math.random() - 0.5) * 24;
+                    ember.y = 8 + Math.random() * 8;
+                    ember.vx = (Math.random() - 0.5) * 0.6;
+                    ember.vy = -0.4 - Math.random() * 0.8;
+                    ember.life = 1;
+                    ember.size = 0.6 + Math.random() * 1.8;
+                }
+
+                // Dessiner la braise avec variation de couleur
+                const alpha = ember.life * 0.9;
+                const colorVariation = Math.sin(ember.rotation) * 0.5 + 0.5;
+
+                // Braise rouge-orange
+                if (colorVariation > 0.3) {
+                    embersGraphics.fillStyle(0xff4422, alpha);
+                } else {
+                    embersGraphics.fillStyle(0xff8844, alpha);
+                }
+                embersGraphics.fillCircle(ember.x, ember.y, ember.size);
+
+                // Halo jaune autour
+                embersGraphics.fillStyle(0xffaa55, alpha * 0.6);
+                embersGraphics.fillCircle(ember.x, ember.y, ember.size + 0.8);
+
+                // Point blanc brillant au centre
+                if (ember.size > 1.2) {
+                    embersGraphics.fillStyle(0xffffff, alpha * 0.7);
+                    embersGraphics.fillCircle(ember.x, ember.y, ember.size * 0.4);
+                }
+            });
+        };
+
+        const emberTimer = this.time.addEvent({
+            delay: 16,
+            loop: true,
+            callback: updateEmbers
+        });
+
+        // === LUEUR INTENSE AU SOL ===
+        const glow = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+        glow.fillStyle(0xff6633, 0.4);
+        glow.fillEllipse(0, 24, 48, 14);
+        glow.fillStyle(0xff8844, 0.3);
+        glow.fillEllipse(0, 24, 40, 11);
+        glow.fillStyle(0xffaa55, 0.2);
+        glow.fillEllipse(0, 24, 32, 8);
+
+        // Animation de la lueur au sol
+        this.tweens.add({
+            targets: glow,
+            alpha: 0.7,
+            duration: 1500,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        // === OMBRES PORTÉES ===
+        const shadows = this.add.graphics();
+        shadows.fillStyle(0x0a0a08, 0.6);
+        shadows.fillEllipse(0, 26, 44, 12);
+
+        // === SYMBOLE DE SOIN (CROIX MÉDICALE) ===
+        const healSymbol = this.add.graphics();
+
+        // Croix de soin au-dessus du feu
+        healSymbol.fillStyle(0x55ff77, 0.9);
+        healSymbol.fillRect(-2, -42, 4, 12);
+        healSymbol.fillRect(-6, -38, 12, 4);
+
+        // Bordure de la croix
+        healSymbol.lineStyle(2, 0x88ffaa, 1);
+        healSymbol.strokeRect(-2, -42, 4, 12);
+        healSymbol.strokeRect(-6, -38, 12, 4);
+
+        // Cercle autour de la croix
+        healSymbol.strokeCircle(0, -36, 10);
+
+        // Lueur de soin pulsante
+        healSymbol.fillStyle(0x55ff77, 0.3);
+        healSymbol.fillCircle(0, -36, 12);
+
+        // Animation de pulsation du symbole de soin
+        this.tweens.add({
+            targets: healSymbol,
+            alpha: { from: 0.6, to: 1 },
+            duration: 1500,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        // Ajouter tous les éléments au container
+        fireContainer.add([shadows, ashCircle, embers, wood, glow, flames, embersGraphics, sword, healSymbol, fire]);
+
+        fire.setData('hp', 100);
+        fire.setData('maxHp', 100);
+        fire.setData('container', fireContainer);
+        fire.setData('flameTimer', flameTimer);
+        fire.setData('emberTimer', emberTimer);
+
+        this.campfires.add(fire);
+        attachHealthBar(this, fire);
+
+        fire.once(Phaser.GameObjects.Events.DESTROY, () => {
+            aura.destroy();
+            embersGraphics.destroy();
+            flameTimer.remove(false);
+            emberTimer.remove(false);
+            if (fireContainer && fireContainer.scene) {
+                fireContainer.destroy();
+            }
+            this.campfires.remove(fire, false, false);
+        });
 
         const timer = this.time.addEvent({ delay: GameConstants.CAMPFIRE_TICK_MS, loop: true, callback: () => {
             const healTargets: Phaser.GameObjects.Rectangle[] = [];
@@ -641,34 +1552,506 @@ export class GameScene extends Phaser.Scene {
         fire.once(Phaser.GameObjects.Events.DESTROY, () => { timer.remove(false); });
     }
 
-    // Forge (débloque les upgrades de tours et générateurs)
+    // FORGE AVEC ENCLUME ET MARTEAU ANIMÉ - Dark Fantasy
     private createForge(x: number, y: number): void {
-        const forge = this.add.rectangle(x, y, 48, 48, 0x3f4457).setDepth(9).setStrokeStyle(1, 0x3e372d, 0.5);
+        // Container principal
+        const forgeContainer = this.add.container(x, y).setDepth(9);
+
+        // Rectangle invisible pour les collisions
+        const forge = this.add.rectangle(0, 0, 48, 48, 0x3f4457, 0)
+            .setStrokeStyle(0, 0x000000, 0);
+
+        // === OMBRES ===
+        const shadows = this.add.graphics();
+        shadows.fillStyle(0x0a0a08, 0.7);
+        shadows.fillEllipse(0, 26, 46, 10);
+
+        // === SOCLE / BASE EN PIERRE ===
+        const base = this.add.graphics();
+        base.fillStyle(0x2a2520, 1);
+        base.fillRect(-20, 16, 40, 8);
+        base.lineStyle(2, 0x1a1510, 1);
+        base.strokeRect(-20, 16, 40, 8);
+
+        // Pierre usée
+        base.fillStyle(0x1a1510, 0.4);
+        base.fillRect(-20, 16, 40, 2);
+
+
+        // === ENCLUME CENTRALE MASSIVE ===
+        const anvil = this.add.graphics();
+
+        // Pied/Socle de l'enclume (large et stable)
+        anvil.fillStyle(0x3a3a3a, 1);
+        anvil.fillRect(-10, 8, 20, 8);
+        anvil.lineStyle(2, 0x2a2a2a, 1);
+        anvil.strokeRect(-10, 8, 20, 8);
+
+        // Corps principal de l'enclume (large et imposant)
+        anvil.fillStyle(0x5a6a7a, 1);
+        anvil.fillRect(-12, -4, 24, 12);
+
+        // Surface plate supérieure (où on frappe)
+        anvil.fillStyle(0x6a7a8a, 1);
+        anvil.fillRect(-12, -8, 24, 4);
+
+        // Corne de l'enclume (partie pointue à droite)
+        anvil.fillStyle(0x5a6a7a, 1);
+        anvil.fillTriangle(12, -8, 18, -6, 12, -4);
+
+        // Reflets métalliques sur la surface
+        anvil.fillStyle(0x9aabbb, 0.5);
+        anvil.fillRect(-10, -7, 4, 2);
+        anvil.fillRect(-2, -7, 6, 2);
+
+        // Bordures de l'enclume
+        anvil.lineStyle(2, 0x3a4a5a, 1);
+        anvil.strokeRect(-12, -8, 24, 4);
+        anvil.strokeRect(-12, -4, 24, 12);
+        anvil.strokeTriangle(12, -8, 18, -6, 12, -4);
+
+        // Marques de coups sur l'enclume (usure)
+        anvil.lineStyle(1, 0x2a2a2a, 0.6);
+        anvil.lineBetween(-8, -6, -6, -7);
+        anvil.lineBetween(2, -6, 4, -7);
+        anvil.lineBetween(-4, -7, -2, -6);
+
+        // === FER CHAUFFÉ SUR L'ENCLUME ===
+        const hotIron = this.add.graphics();
+        const drawHotIron = (intensity: number) => {
+            hotIron.clear();
+
+            // Barre de métal incandescente sur l'enclume
+            hotIron.fillStyle(0xff6633, 0.8);
+            hotIron.fillRect(-6, -6, 12, 3);
+
+            // Lueur orange/jaune intense
+            hotIron.fillStyle(0xff8844, 0.6 + intensity * 0.3);
+            hotIron.fillRect(-5, -5.5, 10, 2);
+
+            hotIron.fillStyle(0xffcc66, 0.4 + intensity * 0.4);
+            hotIron.fillRect(-4, -5, 8, 1.5);
+        };
+        hotIron.setBlendMode(Phaser.BlendModes.ADD);
+
+        // === MARTEAU ANIMÉ QUI FRAPPE ===
+        const hammer = this.add.graphics();
+        const drawHammer = (time: number, impact: boolean) => {
+            hammer.clear();
+
+            // Position du marteau (animation de frappe)
+            const hammerY = impact ? -8 : -20;
+            const hammerAngle = impact ? 0.1 : -0.3;
+
+            // Pivot pour rotation
+            hammer.save();
+            hammer.translateCanvas(10, hammerY);
+            hammer.rotateCanvas(hammerAngle);
+
+            // Manche en bois
+            hammer.fillStyle(0x4a3a2a, 1);
+            hammer.fillRect(-2, 0, 4, 16);
+            hammer.lineStyle(1, 0x3a2a1a, 1);
+            hammer.strokeRect(-2, 0, 4, 16);
+
+            // Texture du bois
+            hammer.lineStyle(0.5, 0x3a2a1a, 0.5);
+            hammer.lineBetween(-1, 2, -1, 14);
+            hammer.lineBetween(1, 2, 1, 14);
+
+            // Tête du marteau (massive)
+            hammer.fillStyle(0x6a7a8a, 1);
+            hammer.fillRect(-6, -6, 12, 6);
+
+            // Reflets métalliques
+            hammer.fillStyle(0x9aabbb, 0.6);
+            hammer.fillRect(-5, -5, 3, 2);
+            hammer.fillRect(2, -5, 2, 2);
+
+            // Bordure de la tête
+            hammer.lineStyle(1.5, 0x4a5a6a, 1);
+            hammer.strokeRect(-6, -6, 12, 6);
+
+            hammer.restore();
+        };
+        forge.setData('hammerTime', 0);
+        forge.setData('hammerPhase', 0);
+
+        // === LUEUR DE FER CHAUFFÉ ===
+        const ironGlow = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+        const drawIronGlow = (intensity: number) => {
+            ironGlow.clear();
+            ironGlow.fillStyle(0xff6633, 0.3 + intensity * 0.2);
+            ironGlow.fillCircle(0, -4, 18);
+            ironGlow.fillStyle(0xff8844, 0.2 + intensity * 0.15);
+            ironGlow.fillCircle(0, -4, 26);
+        };
+
+        this.tweens.add({
+            targets: {},
+            duration: 800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+            onUpdate: (t) => {
+                const intensity = Math.sin(t.progress * Math.PI);
+                drawIronGlow(intensity);
+                drawHotIron(intensity);
+            }
+        });
+
+        // === ÉTINCELLES D'IMPACT ===
+        const impactSparks = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+        const sparkData: Array<{x: number, y: number, vx: number, vy: number, life: number}> = [];
+
+        const createImpactBurst = () => {
+            // Créer une explosion d'étincelles à l'impact
+            for (let i = 0; i < 12; i++) {
+                const angle = (Math.random() - 0.5) * Math.PI;
+                const speed = 1 + Math.random() * 2;
+                sparkData.push({
+                    x: 0,
+                    y: -6,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 1,
+                    life: 1
+                });
+            }
+        };
+
+        // === ANIMATION DU MARTEAU ===
+        const forgeTimer = this.time.addEvent({
+            delay: 16,
+            loop: true,
+            callback: () => {
+                if (!forge.scene) return;
+
+                const time = forge.getData('hammerTime') as number || 0;
+                const phase = forge.getData('hammerPhase') as number || 0;
+
+                forge.setData('hammerTime', time + 0.016);
+
+                // Cycle de frappe : monter (0.5s) -> descendre rapide (0.2s) -> pause (0.3s)
+                const cycleTime = time % 1.0;
+                let isImpact = false;
+
+                if (cycleTime < 0.5) {
+                    // Phase 1: Lever le marteau
+                    drawHammer(time, false);
+                } else if (cycleTime < 0.7) {
+                    // Phase 2: Frappe rapide
+                    drawHammer(time, true);
+
+                    // Créer impact au moment précis
+                    if (phase === 0 && cycleTime >= 0.5) {
+                        createImpactBurst();
+                        forge.setData('hammerPhase', 1);
+                        isImpact = true;
+                    }
+                } else {
+                    // Phase 3: Pause avec marteau en bas
+                    drawHammer(time, true);
+                    if (cycleTime >= 0.99) {
+                        forge.setData('hammerPhase', 0);
+                    }
+                }
+
+                // Dessiner les étincelles
+                impactSparks.clear();
+                sparkData.forEach((spark, idx) => {
+                    spark.x += spark.vx;
+                    spark.y += spark.vy;
+                    spark.vy += 0.08; // Gravité
+                    spark.life -= 0.02;
+
+                    if (spark.life > 0) {
+                        const alpha = spark.life * 0.9;
+                        impactSparks.fillStyle(0xffcc66, alpha);
+                        impactSparks.fillCircle(spark.x, spark.y, 1.5);
+                        impactSparks.fillStyle(0xff8844, alpha * 0.6);
+                        impactSparks.fillCircle(spark.x, spark.y, 2);
+                    } else {
+                        sparkData.splice(idx, 1);
+                    }
+                });
+            }
+        });
+
+
+        // === COMPOSITION FINALE ===
+        forgeContainer.add([shadows, base, anvil, hotIron, ironGlow, hammer, impactSparks, forge]);
+
         forge.setData('hp', 120);
         forge.setData('maxHp', 120);
+        forge.setData('container', forgeContainer);
+        forge.setData('forgeTimer', forgeTimer);
+
         this.forges.add(forge);
         attachHealthBar(this, forge);
+
         // Notifier l'UI qu'une forge existe maintenant
         this.registry.set('forgeCount', this.forges.getLength());
+
         forge.once(Phaser.GameObjects.Events.DESTROY, () => {
+            forgeTimer.remove(false);
+            if (forgeContainer && forgeContainer.scene) {
+                forgeContainer.destroy();
+            }
             this.forges.remove(forge, false, false);
             this.registry.set('forgeCount', this.forges.getLength());
         });
     }
 
-    // Réserve (augmente la capacité max d'éclats)
+    // Réserve d'âmes - COFFRE MIMIC VIVANT (Dark Fantasy)
     private createStorage(x: number, y: number): void {
-        const stor = this.add.rectangle(x, y, 48, 48, 0x6a5438).setDepth(9).setStrokeStyle(1, 0x3e372d, 0.5);
+        // Container principal
+        const storageContainer = this.add.container(x, y).setDepth(9);
+
+        // Rectangle invisible pour les collisions
+        const stor = this.add.rectangle(0, 0, 48, 48, 0x6a5438, 0)
+            .setStrokeStyle(0, 0x000000, 0);
+
+        // === OMBRES PORTÉES ===
+        const shadows = this.add.graphics();
+        shadows.fillStyle(0x0a0a08, 0.7);
+        shadows.fillEllipse(0, 24, 48, 12);
+
+        // === CORPS DU MIMIC (COFFRE VIVANT) ===
+        const mimicBody = this.add.graphics();
+
+        // Base du coffre (partie inférieure - mâchoire)
+        mimicBody.fillStyle(0x3a2a1a, 1);
+        mimicBody.fillRect(-18, 2, 36, 18);
+
+        // Bordure métallique usée
+        mimicBody.lineStyle(2.5, 0x5a5a4a, 1);
+        mimicBody.strokeRect(-18, 2, 36, 18);
+
+        // Bandes de renfort (côtes du monstre)
+        mimicBody.fillStyle(0x4a4a3a, 1);
+        mimicBody.fillRect(-18, 6, 36, 2);
+        mimicBody.fillRect(-18, 12, 36, 2);
+
+        // Couvercle du coffre (partie supérieure - mâchoire supérieure)
+        mimicBody.fillStyle(0x2a1a0a, 1);
+        mimicBody.fillRect(-18, -14, 36, 16);
+
+        // Bordure du couvercle
+        mimicBody.lineStyle(2.5, 0x4a4a3a, 1);
+        mimicBody.strokeRect(-18, -14, 36, 16);
+
+        // Charnières du coffre (organiques, comme des articulations)
+        mimicBody.fillStyle(0x5a3a2a, 1);
+        mimicBody.fillCircle(-16, 0, 3);
+        mimicBody.fillCircle(16, 0, 3);
+        mimicBody.lineStyle(1.5, 0x3a2a1a, 1);
+        mimicBody.strokeCircle(-16, 0, 3);
+        mimicBody.strokeCircle(16, 0, 3);
+
+        // === DENTS ACÉRÉES (MÂCHOIRE SUPÉRIEURE) ===
+        const teethTop = this.add.graphics();
+        teethTop.fillStyle(0xd0d0c0, 1);
+
+        // Rangée de dents pointues
+        for (let i = 0; i < 7; i++) {
+            const tx = -14 + i * 5;
+            teethTop.fillTriangle(tx, 2, tx + 2, -2, tx + 4, 2);
+        }
+
+        // Contours des dents
+        teethTop.lineStyle(1, 0x9a9a8a, 1);
+        for (let i = 0; i < 7; i++) {
+            const tx = -14 + i * 5;
+            teethTop.strokeTriangle(tx, 2, tx + 2, -2, tx + 4, 2);
+        }
+
+        // === DENTS ACÉRÉES (MÂCHOIRE INFÉRIEURE) ===
+        const teethBottom = this.add.graphics();
+        teethBottom.fillStyle(0xc0c0b0, 1);
+
+        // Rangée de dents pointues
+        for (let i = 0; i < 7; i++) {
+            const tx = -12 + i * 5;
+            teethBottom.fillTriangle(tx, 2, tx + 2, 6, tx + 4, 2);
+        }
+
+        // Contours des dents
+        teethBottom.lineStyle(1, 0x8a8a7a, 1);
+        for (let i = 0; i < 7; i++) {
+            const tx = -12 + i * 5;
+            teethBottom.strokeTriangle(tx, 2, tx + 2, 6, tx + 4, 2);
+        }
+
+        // === LANGUE VISQUEUSE ===
+        const tongue = this.add.graphics();
+        const drawTongue = (time: number) => {
+            tongue.clear();
+
+            const wiggle = Math.sin(time * 3) * 2;
+
+            // Langue rouge/rose
+            tongue.fillStyle(0xaa4455, 1);
+            tongue.fillEllipse(wiggle, 4, 12, 6);
+
+            // Reflets humides
+            tongue.fillStyle(0xcc6677, 0.6);
+            tongue.fillEllipse(wiggle - 2, 3, 6, 3);
+
+            // Contour
+            tongue.lineStyle(1.5, 0x882233, 1);
+            tongue.strokeEllipse(wiggle, 4, 12, 6);
+        };
+        stor.setData('tongueTime', 0);
+
+        // === OEIL MONSTRUEUX ===
+        const eye = this.add.graphics();
+        const drawEye = (time: number) => {
+            eye.clear();
+
+            const blink = Math.abs(Math.sin(time * 0.5));
+            const eyeHeight = 6 * blink;
+
+            if (blink > 0.1) {
+                // Blanc de l'œil
+                eye.fillStyle(0xeeeecc, 1);
+                eye.fillEllipse(-8, -8, 8, eyeHeight);
+
+                // Iris (rouge/jaune malsain)
+                eye.fillStyle(0xccaa33, 1);
+                eye.fillCircle(-8, -8, 2.5 * blink);
+
+                // Pupille
+                eye.fillStyle(0x0a0a08, 1);
+                eye.fillCircle(-8, -8, 1.5 * blink);
+
+                // Contour
+                eye.lineStyle(1.5, 0x6a5a4a, 1);
+                eye.strokeEllipse(-8, -8, 8, eyeHeight);
+
+                // Vaisseaux sanguins
+                eye.lineStyle(0.5, 0xaa3333, 0.6);
+                eye.lineBetween(-12, -8, -10, -8);
+                eye.lineBetween(-8, -10, -8, -9);
+            }
+        };
+        stor.setData('eyeTime', 0);
+
+        // === TENTACULES / CHAÎNES ORGANIQUES ===
+        const tentacles = this.add.graphics();
+        const drawTentacles = (time: number) => {
+            tentacles.clear();
+
+            tentacles.lineStyle(3, 0x4a3a2a, 1);
+
+            // Tentacule gauche (ondulant)
+            for (let i = 0; i < 5; i++) {
+                const y = -18 + i * 4;
+                const wave = Math.sin(time * 2 + i * 0.5) * 2;
+                tentacles.lineBetween(-18 + wave, y, -18 + wave, y + 4);
+            }
+
+            // Tentacule droite
+            for (let i = 0; i < 5; i++) {
+                const y = -18 + i * 4;
+                const wave = Math.sin(time * 2 + i * 0.5 + Math.PI) * 2;
+                tentacles.lineBetween(18 + wave, y, 18 + wave, y + 4);
+            }
+
+            // Ventouses sur les tentacules
+            tentacles.fillStyle(0x5a4a3a, 1);
+            for (let i = 0; i < 4; i++) {
+                const y = -16 + i * 5;
+                const wave1 = Math.sin(time * 2 + i * 0.5) * 2;
+                const wave2 = Math.sin(time * 2 + i * 0.5 + Math.PI) * 2;
+                tentacles.fillCircle(-18 + wave1, y, 1.5);
+                tentacles.fillCircle(18 + wave2, y, 1.5);
+            }
+        };
+        stor.setData('tentacleTime', 0);
+
+        // === BAVE / MUCUS ===
+        const slime = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+        const slimeParticles: Array<{x: number, y: number, vy: number, life: number}> = [];
+        for (let i = 0; i < 6; i++) {
+            slimeParticles.push({
+                x: (Math.random() - 0.5) * 20,
+                y: 0,
+                vy: 0.15 + Math.random() * 0.2,
+                life: Math.random()
+            });
+        }
+
+        const drawSlime = () => {
+            slime.clear();
+            slimeParticles.forEach((p) => {
+                p.y += p.vy;
+                p.life -= 0.003;
+
+                if (p.life <= 0 || p.y > 20) {
+                    p.x = (Math.random() - 0.5) * 20;
+                    p.y = 0;
+                    p.life = 1;
+                }
+
+                const alpha = p.life * 0.6;
+                slime.fillStyle(0x88cc88, alpha);
+                slime.fillCircle(p.x, p.y, 1.5);
+            });
+        };
+
+        // Animation de respiration du Mimic
+        this.tweens.add({
+            targets: mimicBody,
+            scaleY: { from: 1, to: 1.05 },
+            duration: 1500,
+            ease: 'Sine.easeInOut',
+            yoyo: true,
+            repeat: -1
+        });
+        // Animation continue du Mimic
+        const mimicTimer = this.time.addEvent({
+            delay: 16,
+            loop: true,
+            callback: () => {
+                if (!stor.scene) return;
+
+                const tongueT = stor.getData('tongueTime') as number || 0;
+                const eyeT = stor.getData('eyeTime') as number || 0;
+                const tentacleT = stor.getData('tentacleTime') as number || 0;
+
+                stor.setData('tongueTime', tongueT + 0.016);
+                stor.setData('eyeTime', eyeT + 0.016);
+                stor.setData('tentacleTime', tentacleT + 0.016);
+
+                drawTongue(tongueT);
+                drawEye(eyeT);
+                drawTentacles(tentacleT);
+                drawSlime();
+            }
+        });
+
+        // === COMPOSITION FINALE ===
+        storageContainer.add([shadows, mimicBody, teethBottom, tongue, teethTop, eye, tentacles, slime, stor]);
+
         stor.setData('hp', 140);
         stor.setData('maxHp', 140);
+        stor.setData('container', storageContainer);
+        stor.setData('mimicTimer', mimicTimer);
+
         this.storages.add(stor);
         attachHealthBar(this, stor);
+
         // Augmenter la capacité
         const max = (this.registry.get('maxSoulShards') as number) ?? 100;
         const inc = 50;
         this.registry.set('maxSoulShards', max + inc);
         stor.setData('capInc', inc);
+
         stor.once(Phaser.GameObjects.Events.DESTROY, () => {
+            mimicTimer.remove(false);
+            if (storageContainer && storageContainer.scene) {
+                storageContainer.destroy();
+            }
             this.storages.remove(stor, false, false);
             const curMax = (this.registry.get('maxSoulShards') as number) ?? 100;
             const dec = stor.getData('capInc') as number ?? 0;
@@ -679,21 +2062,248 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
-    // Caserne
+    // TAVERNE DE RECRUTEMENT - Dark Fantasy (mercenaires, alcool, combat)
     private createBarracks(x: number, y: number): void {
-        const br = this.add.rectangle(x, y, 48, 48, 0x4b3323).setDepth(9).setStrokeStyle(1, 0x3e372d, 0.5);
+        // Container principal
+        const barracksContainer = this.add.container(x, y).setDepth(9);
+
+        // Rectangle invisible pour les collisions
+        const br = this.add.rectangle(0, 0, 48, 48, 0x4b3323, 0)
+            .setStrokeStyle(0, 0x000000, 0);
+
+        // === OMBRES ===
+        const shadows = this.add.graphics();
+        shadows.fillStyle(0x0a0a08, 0.7);
+        shadows.fillEllipse(0, 26, 50, 12);
+
+        // === BÂTIMENT DE LA TAVERNE (BOIS) ===
+        const building = this.add.graphics();
+
+        // Murs en bois sombre
+        building.fillStyle(0x3a2a1a, 1);
+        building.fillRect(-18, -8, 36, 24);
+
+        // Planches horizontales visibles
+        building.lineStyle(1, 0x2a1a0a, 0.7);
+        for (let i = 0; i < 6; i++) {
+            building.lineBetween(-18, -8 + i * 5, 18, -8 + i * 5);
+        }
+
+        // Bordures du bâtiment
+        building.lineStyle(2.5, 0x2a1a0a, 1);
+        building.strokeRect(-18, -8, 36, 24);
+
+        // Toit en bois (forme triangulaire)
+        building.fillStyle(0x4a3a2a, 1);
+        building.fillTriangle(-20, -8, 0, -20, 20, -8);
+        building.lineStyle(2, 0x3a2a1a, 1);
+        building.strokeTriangle(-20, -8, 0, -20, 20, -8);
+
+        // Tuiles/planches du toit
+        building.lineStyle(1, 0x3a2a1a, 0.6);
+        for (let i = 0; i < 4; i++) {
+            const y = -18 + i * 3;
+            building.lineBetween(-18 + i * 5, y, 18 - i * 5, y);
+        }
+
+        // === PORTE EN BOIS MASSIVE ===
+        const door = this.add.graphics();
+        door.fillStyle(0x2a1a0a, 1);
+        door.fillRect(-8, 4, 16, 12);
+
+        // Bordure de la porte
+        door.lineStyle(2, 0x1a0a00, 1);
+        door.strokeRect(-8, 4, 16, 12);
+
+        // Planches verticales
+        door.lineStyle(1, 0x1a0a00, 0.8);
+        door.lineBetween(-4, 4, -4, 16);
+        door.lineBetween(0, 4, 0, 16);
+        door.lineBetween(4, 4, 4, 16);
+
+        // Poignée en fer
+        door.fillStyle(0x4a4a4a, 1);
+        door.fillCircle(5, 10, 1.5);
+
+        // === FENÊTRES AVEC LUEUR CHAUDE ===
+        const windows = this.add.graphics();
+
+        // Fenêtre gauche
+        windows.fillStyle(0xffaa44, 0.6);
+        windows.fillRect(-14, -2, 6, 6);
+        windows.lineStyle(1.5, 0x2a1a0a, 1);
+        windows.strokeRect(-14, -2, 6, 6);
+        windows.lineBetween(-11, -2, -11, 4);
+        windows.lineBetween(-14, 1, -8, 1);
+
+        // Fenêtre droite
+        windows.fillStyle(0xffaa44, 0.6);
+        windows.fillRect(8, -2, 6, 6);
+        windows.lineStyle(1.5, 0x2a1a0a, 1);
+        windows.strokeRect(8, -2, 6, 6);
+        windows.lineBetween(11, -2, 11, 4);
+        windows.lineBetween(8, 1, 14, 1);
+
+        // === ENSEIGNE DE LA TAVERNE ===
+        const sign = this.add.graphics();
+
+        // Support en bois
+        sign.fillStyle(0x3a2a1a, 1);
+        sign.fillRect(-2, -22, 4, 6);
+
+        // Panneau de l'enseigne
+        sign.fillStyle(0x4a3a2a, 1);
+        sign.fillRect(-12, -24, 24, 10);
+        sign.lineStyle(2, 0x2a1a0a, 1);
+        sign.strokeRect(-12, -24, 24, 10);
+
+        // Épée et chope croisées (symbole taverne mercenaires)
+        sign.fillStyle(0x8a7a4a, 1);
+        // Épée
+        sign.fillRect(-1, -22, 2, 6);
+        sign.fillTriangle(-2, -22, 1, -24, 0, -22);
+        // Chope
+        sign.fillRect(2, -22, 4, 5);
+        sign.fillRect(3, -23, 2, 1);
+        sign.fillStyle(0xffaa44, 0.7);
+        sign.fillRect(2.5, -21, 3, 3);
+
+        // === TONNEAUX D'ALCOOL ===
+        const barrels = this.add.graphics();
+
+        // Tonneau gauche
+        barrels.fillStyle(0x4a3a2a, 1);
+        barrels.fillEllipse(-18, 14, 6, 4);
+        barrels.fillRect(-21, 12, 6, 4);
+        barrels.fillEllipse(-18, 12, 6, 4);
+        barrels.lineStyle(1.5, 0x3a2a1a, 1);
+        barrels.strokeRect(-21, 12, 6, 4);
+        barrels.strokeEllipse(-18, 12, 6, 4);
+        barrels.strokeEllipse(-18, 14, 6, 4);
+
+        // Tonneau droite (empilé)
+        barrels.fillStyle(0x4a3a2a, 1);
+        barrels.fillEllipse(18, 16, 5, 3);
+        barrels.fillRect(16, 14, 4, 4);
+        barrels.fillEllipse(18, 14, 5, 3);
+        barrels.lineStyle(1.5, 0x3a2a1a, 1);
+        barrels.strokeRect(16, 14, 4, 4);
+        barrels.strokeEllipse(18, 14, 5, 3);
+        barrels.strokeEllipse(18, 16, 5, 3);
+
+        // === MERCENAIRES / SILHOUETTES ===
+        const mercs = this.add.graphics();
+
+        // Mercenaire 1 (gauche - guerrier)
+        mercs.fillStyle(0x5a4a3a, 0.9);
+        mercs.fillCircle(-16, 0, 3);
+        mercs.fillRect(-18, 3, 4, 6);
+        // Épée à la ceinture
+        mercs.fillStyle(0x6a7a8a, 1);
+        mercs.fillRect(-17, 7, 1.5, 4);
+
+        // Mercenaire 2 (droite - archer)
+        mercs.fillStyle(0x4a5a4a, 0.9);
+        mercs.fillCircle(16, 0, 3);
+        mercs.fillRect(14, 3, 4, 6);
+        // Arc sur le dos
+        mercs.lineStyle(1.5, 0x5a4a3a, 0.8);
+        mercs.strokeCircle(16, 4, 2);
+
+        // === CHEMINÉE ET FUMÉE ===
+        const chimney = this.add.graphics();
+        chimney.fillStyle(0x3a2a1a, 1);
+        chimney.fillRect(8, -20, 4, 6);
+        chimney.lineStyle(1.5, 0x2a1a0a, 1);
+        chimney.strokeRect(8, -20, 4, 6);
+
+        const tavernSmoke = this.add.graphics().setBlendMode(Phaser.BlendModes.MULTIPLY);
+        const smokeParticles: Array<{x: number, y: number, vy: number, life: number, size: number}> = [];
+        for (let i = 0; i < 5; i++) {
+            smokeParticles.push({
+                x: 10 + (Math.random() - 0.5) * 2,
+                y: -20,
+                vy: -0.3 - Math.random() * 0.2,
+                life: Math.random(),
+                size: 1 + Math.random()
+            });
+        }
+
+        const drawTavernSmoke = () => {
+            tavernSmoke.clear();
+            smokeParticles.forEach((p) => {
+                p.y += p.vy;
+                p.x += Math.sin(p.y * 0.1) * 0.2;
+                p.life -= 0.004;
+                p.size += 0.01;
+
+                if (p.life <= 0 || p.y < -35) {
+                    p.x = 10 + (Math.random() - 0.5) * 2;
+                    p.y = -20;
+                    p.life = 1;
+                    p.size = 1 + Math.random();
+                }
+
+                const alpha = p.life * 0.4;
+                tavernSmoke.fillStyle(0x5a5a5a, alpha);
+                tavernSmoke.fillCircle(p.x, p.y, p.size);
+            });
+        };
+
+        // === LUEUR DES FENÊTRES (pulsation douce) ===
+        const windowGlow = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+        const drawWindowGlow = (intensity: number) => {
+            windowGlow.clear();
+            windowGlow.fillStyle(0xffaa44, 0.3 + intensity * 0.2);
+            windowGlow.fillCircle(-11, 1, 6);
+            windowGlow.fillCircle(11, 1, 6);
+        };
+        drawWindowGlow(0);
+
+        // Timer d'animation
+        const barrackTimer = this.time.addEvent({
+            delay: 16,
+            loop: true,
+            callback: () => {
+                if (!br.scene) return;
+
+                const glowT = br.getData('glowTime') as number || 0;
+                br.setData('glowTime', glowT + 0.016);
+
+                const intensity = Math.sin(glowT * 2) * 0.5 + 0.5;
+                drawWindowGlow(intensity);
+                drawTavernSmoke();
+            }
+        });
+
+        // === COMPOSITION FINALE ===
+        barracksContainer.add([
+            shadows, building, door, windows, windowGlow, sign, barrels,
+            mercs, chimney, tavernSmoke, br
+        ]);
+
         br.setData('hp', 150);
         br.setData('maxHp', 150);
+        br.setData('container', barracksContainer);
+        br.setData('barrackTimer', barrackTimer);
+
         this.barracks.add(br);
         attachHealthBar(this, br);
+
         const count = ((this.registry.get('barracksCount') as number) ?? 0) + 1;
         this.registry.set('barracksCount', count);
+
         br.once(Phaser.GameObjects.Events.DESTROY, () => {
+            barrackTimer.remove(false);
+            if (barracksContainer && barracksContainer.scene) {
+                barracksContainer.destroy();
+            }
             this.barracks.remove(br, false, false);
             const c = Math.max(0, ((this.registry.get('barracksCount') as number) ?? 1) - 1);
             this.registry.set('barracksCount', c);
         });
     }
+
 
     private spawnEnemy(): void {
         // Choisir une cellule de spawn sur le bord gauche non bloquée
@@ -962,8 +2572,56 @@ export class GameScene extends Phaser.Scene {
         const towerX = (tower.getData('worldX') as number) ?? tower.x;
         const towerY = (tower.getData('worldY') as number) ?? tower.y;
 
-        // Projectile Arcade simple (rectangle) pour collisions fiables
-        const bullet = this.add.rectangle(towerX, towerY, 8, 8, 0x8fa9bf).setDepth(12);
+        // === BOULE DE FEU D'ÂME (PROJECTILE DARK SOULS) ===
+        // Rectangle invisible pour la physique
+        const bullet = this.add.rectangle(towerX, towerY, 10, 10, 0x000000, 0).setDepth(12);
+
+        // Visuel de la boule de feu
+        const fireball = this.add.graphics({ x: towerX, y: towerY }).setDepth(12);
+        fireball.setBlendMode(Phaser.BlendModes.ADD);
+
+        const drawFireball = () => {
+            fireball.clear();
+            const time = Date.now() * 0.01;
+            const flicker = Math.sin(time) * 0.2 + 0.8;
+
+            // Noyau orange vif
+            fireball.fillStyle(0xff6633, 0.9 * flicker);
+            fireball.fillCircle(0, 0, 5);
+
+            // Couronne orange
+            fireball.fillStyle(0xff8844, 0.7 * flicker);
+            fireball.fillCircle(0, 0, 7);
+
+            // Halo jaune
+            fireball.fillStyle(0xffaa44, 0.5 * flicker);
+            fireball.fillCircle(0, 0, 9);
+
+            // Particules de feu tournantes
+            for (let i = 0; i < 4; i++) {
+                const angle = time * 0.5 + (i * Math.PI / 2);
+                const dist = 6 + Math.sin(time + i) * 2;
+                const px = Math.cos(angle) * dist;
+                const py = Math.sin(angle) * dist;
+                fireball.fillStyle(0xffcc66, 0.6 * flicker);
+                fireball.fillCircle(px, py, 2);
+            }
+        };
+
+        // Animation continue de la boule de feu
+        const fireTimer = this.time.addEvent({
+            delay: 16,
+            loop: true,
+            callback: () => {
+                if (!fireball.scene) return;
+                drawFireball();
+                fireball.setPosition(bullet.x, bullet.y);
+            }
+        });
+
+        // Stocker le timer et le graphics pour nettoyage
+        bullet.setData('fireballGraphics', fireball);
+        bullet.setData('fireTimer', fireTimer);
 
         // Ajouter au groupe physique AVANT d'ajouter la physique
         this.bullets.add(bullet);
@@ -980,8 +2638,20 @@ export class GameScene extends Phaser.Scene {
         const vy = (dy / len) * GameConstants.BULLET_SPEED;
         body.setVelocity(vx, vy);
 
-        // Ajout visuel léger: tween d'alpha
-        this.tweens.add({ targets: bullet, alpha: { from: 1, to: 0.6 }, duration: 200, yoyo: true, repeat: 3 });
+        // Rotation de la boule de feu
+        this.tweens.add({
+            targets: fireball,
+            angle: 360,
+            duration: 1000,
+            repeat: -1,
+            ease: 'Linear'
+        });
+
+        // Nettoyage à la destruction
+        bullet.once(Phaser.GameObjects.Events.DESTROY, () => {
+            if (fireTimer) fireTimer.remove(false);
+            if (fireball && fireball.scene) fireball.destroy();
+        });
     }
 
     private fireAllyProjectile(ally: Phaser.GameObjects.Rectangle, target: EnemyGO): void {
@@ -1517,7 +3187,7 @@ export class GameScene extends Phaser.Scene {
         const rem = (this.registry.get('waveRemaining') as number) ?? 0;
         const next = Math.max(0, rem - delta);
         this.registry.set('waveRemaining', next);
-        // Ne plus mettre waveActive à false ici !
+        // Ne pas mettre waveActive à false ici !
     }
 
     // Système de production passive d'âmes (idle game)
@@ -1642,11 +3312,107 @@ export class GameScene extends Phaser.Scene {
             const yieldMul = 1 + (newLevel * 0.75); // +75% par niveau
             building.setData('yieldMul', yieldMul);
 
-            // Changer la couleur selon le niveau
-            const colors = [0x7b6a2e, 0x8f7d3a, 0xa39046, 0xbaa552];
-            building.setFillStyle(colors[newLevel]);
+            // Récupérer les éléments graphiques du générateur
+            const soulsGraphics = building.getData('soulsGraphics') as Phaser.GameObjects.Graphics | undefined;
+            const eyeGlowGraphics = building.getData('eyeGlowGraphics') as Phaser.GameObjects.Graphics | undefined;
+            const auraGraphics = building.getData('auraGraphics') as Phaser.GameObjects.Graphics | undefined;
 
-            this.game.events.emit('notify', `Générateur amélioré au niveau ${newLevel}`, 'success');
+            // Couleurs des âmes selon le niveau
+            const soulColors = [
+                { main: 0x7a9fbf, glow: 0x9fbfdf }, // Niveau 0: Bleu spectral standard
+                { main: 0x8aafcf, glow: 0xafcfef }, // Niveau 1: Bleu plus vif
+                { main: 0x9fbfdf, glow: 0xbfdfff }, // Niveau 2: Cyan brillant
+                { main: 0xbfa56a, glow: 0xdfc58f }  // Niveau 3: Doré (âmes anciennes)
+            ];
+
+            // Couleurs de lueur des yeux
+            const eyeColors = [
+                { main: 0x7aafd0, halo: 0x5a8fb0 }, // Niveau 0
+                { main: 0x8fbfe0, halo: 0x6f9fc0 }, // Niveau 1
+                { main: 0xafd5ff, halo: 0x8fb5df }, // Niveau 2
+                { main: 0xffd58f, halo: 0xdfb56f }  // Niveau 3: Doré
+            ];
+
+            const soulCol = soulColors[newLevel];
+            const eyeCol = eyeColors[newLevel];
+
+            // Redessiner les âmes spectrales avec la nouvelle couleur
+            if (soulsGraphics) {
+                soulsGraphics.clear();
+                soulsGraphics.fillStyle(soulCol.main, 0.6);
+
+                // Âme gauche (forme de flamme/spectre)
+                soulsGraphics.beginPath();
+                soulsGraphics.arc(-8, -16, 4, Math.PI, 0, false);
+                soulsGraphics.lineTo(-6, -20);
+                soulsGraphics.lineTo(-8, -24);
+                soulsGraphics.lineTo(-10, -20);
+                soulsGraphics.closePath();
+                soulsGraphics.fillPath();
+
+                // Âme centrale (plus grande)
+                soulsGraphics.beginPath();
+                soulsGraphics.arc(0, -18, 5, Math.PI, 0, false);
+                soulsGraphics.lineTo(3, -23);
+                soulsGraphics.lineTo(0, -28);
+                soulsGraphics.lineTo(-3, -23);
+                soulsGraphics.closePath();
+                soulsGraphics.fillPath();
+
+                // Âme droite
+                soulsGraphics.beginPath();
+                soulsGraphics.arc(8, -16, 4, Math.PI, 0, false);
+                soulsGraphics.lineTo(10, -20);
+                soulsGraphics.lineTo(8, -24);
+                soulsGraphics.lineTo(6, -20);
+                soulsGraphics.closePath();
+                soulsGraphics.fillPath();
+
+                soulsGraphics.lineStyle(1, soulCol.glow, 0.5 + newLevel * 0.15);
+                soulsGraphics.strokePath();
+
+                // Ajouter des petites âmes supplémentaires pour les niveaux élevés
+                if (newLevel >= 2) {
+                    soulsGraphics.fillStyle(soulCol.glow, 0.5);
+                    soulsGraphics.fillCircle(-12, -12, 2);
+                    soulsGraphics.fillCircle(12, -12, 2);
+                }
+
+                // Ajouter des rayons d'âmes pour le niveau max
+                if (newLevel === 3) {
+                    soulsGraphics.lineStyle(2, soulCol.glow, 0.6);
+                    soulsGraphics.lineBetween(0, -28, 0, -34);
+                    soulsGraphics.lineBetween(-8, -24, -12, -26);
+                    soulsGraphics.lineBetween(8, -24, 12, -26);
+                }
+            }
+
+            // Redessiner la lueur des yeux avec la nouvelle couleur
+            if (eyeGlowGraphics) {
+                eyeGlowGraphics.clear();
+                eyeGlowGraphics.fillStyle(eyeCol.main, 0.8 + newLevel * 0.05);
+                eyeGlowGraphics.fillCircle(-4, -10, 2 + newLevel * 0.3);
+                eyeGlowGraphics.fillCircle(4, -10, 2 + newLevel * 0.3);
+
+                eyeGlowGraphics.fillStyle(eyeCol.halo, 0.4 + newLevel * 0.1);
+                eyeGlowGraphics.fillCircle(-4, -10, 3 + newLevel * 0.5);
+                eyeGlowGraphics.fillCircle(4, -10, 3 + newLevel * 0.5);
+            }
+
+            // Modifier l'aura pour qu'elle soit plus intense
+            if (auraGraphics) {
+                const auraColors = [
+                    0x5a7a9a, // Niveau 0: Bleu sombre
+                    0x6a8aaa, // Niveau 1: Bleu plus vif
+                    0x7a9aba, // Niveau 2: Bleu clair
+                    0xbfa56a  // Niveau 3: Doré fantomatique
+                ];
+
+                building.setData('auraColor', auraColors[newLevel]);
+                building.setData('auraIntensity', 1 + newLevel * 0.3);
+            }
+
+            this.game.events.emit('notify', `Générateur amélioré au niveau ${newLevel} (+${(yieldMul * 100).toFixed(0)}% production)`, 'success');
         }
 
         return true;
@@ -1882,11 +3648,95 @@ export class GameScene extends Phaser.Scene {
             if (building.type === 'generator') {
                 if (building.yieldMul !== undefined) builtObject.setData('yieldMul', building.yieldMul);
 
-                // Mettre à jour la couleur selon le niveau
+                // Mettre à jour l'apparence selon le niveau
                 const level = building.upgradeLevel ?? 0;
                 if (level > 0) {
-                    const colors = [0x7b6a2e, 0x8f7d3a, 0xa39046, 0xbaa552];
-                    builtObject.setFillStyle(colors[level]);
+                    const soulsGraphics = builtObject.getData('soulsGraphics') as Phaser.GameObjects.Graphics | undefined;
+                    const eyeGlowGraphics = builtObject.getData('eyeGlowGraphics') as Phaser.GameObjects.Graphics | undefined;
+                    const auraGraphics = builtObject.getData('auraGraphics') as Phaser.GameObjects.Graphics | undefined;
+
+                    // Couleurs des âmes selon le niveau
+                    const soulColors = [
+                        { main: 0x7a9fbf, glow: 0x9fbfdf },
+                        { main: 0x8aafcf, glow: 0xafcfef },
+                        { main: 0x9fbfdf, glow: 0xbfdfff },
+                        { main: 0xbfa56a, glow: 0xdfc58f }
+                    ];
+
+                    const eyeColors = [
+                        { main: 0x7aafd0, halo: 0x5a8fb0 },
+                        { main: 0x8fbfe0, halo: 0x6f9fc0 },
+                        { main: 0xafd5ff, halo: 0x8fb5df },
+                        { main: 0xffd58f, halo: 0xdfb56f }
+                    ];
+
+                    const soulCol = soulColors[level];
+                    const eyeCol = eyeColors[level];
+
+                    // Redessiner les âmes
+                    if (soulsGraphics) {
+                        soulsGraphics.clear();
+                        soulsGraphics.fillStyle(soulCol.main, 0.6);
+
+                        soulsGraphics.beginPath();
+                        soulsGraphics.arc(-8, -16, 4, Math.PI, 0, false);
+                        soulsGraphics.lineTo(-6, -20);
+                        soulsGraphics.lineTo(-8, -24);
+                        soulsGraphics.lineTo(-10, -20);
+                        soulsGraphics.closePath();
+                        soulsGraphics.fillPath();
+
+                        soulsGraphics.beginPath();
+                        soulsGraphics.arc(0, -18, 5, Math.PI, 0, false);
+                        soulsGraphics.lineTo(3, -23);
+                        soulsGraphics.lineTo(0, -28);
+                        soulsGraphics.lineTo(-3, -23);
+                        soulsGraphics.closePath();
+                        soulsGraphics.fillPath();
+
+                        soulsGraphics.beginPath();
+                        soulsGraphics.arc(8, -16, 4, Math.PI, 0, false);
+                        soulsGraphics.lineTo(10, -20);
+                        soulsGraphics.lineTo(8, -24);
+                        soulsGraphics.lineTo(6, -20);
+                        soulsGraphics.closePath();
+                        soulsGraphics.fillPath();
+
+                        soulsGraphics.lineStyle(1, soulCol.glow, 0.5 + level * 0.15);
+                        soulsGraphics.strokePath();
+
+                        if (level >= 2) {
+                            soulsGraphics.fillStyle(soulCol.glow, 0.5);
+                            soulsGraphics.fillCircle(-12, -12, 2);
+                            soulsGraphics.fillCircle(12, -12, 2);
+                        }
+
+                        if (level === 3) {
+                            soulsGraphics.lineStyle(2, soulCol.glow, 0.6);
+                            soulsGraphics.lineBetween(0, -28, 0, -34);
+                            soulsGraphics.lineBetween(-8, -24, -12, -26);
+                            soulsGraphics.lineBetween(8, -24, 12, -26);
+                        }
+                    }
+
+                    // Redessiner la lueur des yeux
+                    if (eyeGlowGraphics) {
+                        eyeGlowGraphics.clear();
+                        eyeGlowGraphics.fillStyle(eyeCol.main, 0.8 + level * 0.05);
+                        eyeGlowGraphics.fillCircle(-4, -10, 2 + level * 0.3);
+                        eyeGlowGraphics.fillCircle(4, -10, 2 + level * 0.3);
+
+                        eyeGlowGraphics.fillStyle(eyeCol.halo, 0.4 + level * 0.1);
+                        eyeGlowGraphics.fillCircle(-4, -10, 3 + level * 0.5);
+                        eyeGlowGraphics.fillCircle(4, -10, 3 + level * 0.5);
+                    }
+
+                    // Modifier l'aura
+                    if (auraGraphics) {
+                        const auraColors = [0x5a7a9a, 0x6a8aaa, 0x7a9aba, 0xbfa56a];
+                        builtObject.setData('auraColor', auraColors[level]);
+                        builtObject.setData('auraIntensity', 1 + level * 0.3);
+                    }
                 }
             }
 
