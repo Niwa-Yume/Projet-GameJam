@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import { createBonfire } from '../entities/Bonfire';
 import { createSkeletonEnemy } from '../entities/Enemies';
 import { attachHealthBar, updateHealthBar } from '../ui/HealthBar';
-import { ensureFlameTexture, ensureSmokeTexture } from '../gfx/CanvasTextures';
 import { SaveSystem } from '../utils/SaveSystem';
 import { GameConstants } from './GameConstants';
 import { PathfindingGrid } from './PathfindingGrid';
@@ -1636,7 +1635,7 @@ export class GameScene extends Phaser.Scene {
 
         // === MARTEAU ANIMÉ QUI FRAPPE ===
         const hammer = this.add.graphics();
-        const drawHammer = (time: number, impact: boolean) => {
+        const drawHammer = (impact: boolean) => {
             hammer.clear();
 
             // Position du marteau (animation de frappe)
@@ -1733,24 +1732,22 @@ export class GameScene extends Phaser.Scene {
 
                 // Cycle de frappe : monter (0.5s) -> descendre rapide (0.2s) -> pause (0.3s)
                 const cycleTime = time % 1.0;
-                let isImpact = false;
 
                 if (cycleTime < 0.5) {
                     // Phase 1: Lever le marteau
-                    drawHammer(time, false);
+                    drawHammer(false);
                 } else if (cycleTime < 0.7) {
                     // Phase 2: Frappe rapide
-                    drawHammer(time, true);
+                    drawHammer(true);
 
                     // Créer impact au moment précis
                     if (phase === 0 && cycleTime >= 0.5) {
                         createImpactBurst();
                         forge.setData('hammerPhase', 1);
-                        isImpact = true;
                     }
                 } else {
                     // Phase 3: Pause avec marteau en bas
-                    drawHammer(time, true);
+                    drawHammer(true);
                     if (cycleTime >= 0.99) {
                         forge.setData('hammerPhase', 0);
                     }
