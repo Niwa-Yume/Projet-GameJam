@@ -27,6 +27,7 @@ export class UIScene extends Phaser.Scene {
   } as const;
 
   private shardsText!: Phaser.GameObjects.Text;
+  private productionText!: Phaser.GameObjects.Text;
   private onShardsChanged?: (parent: Phaser.Data.DataManager, value: number, previousValue: number) => void;
   private onMaxShardsChanged?: (parent: Phaser.Data.DataManager, value: number, previousValue: number) => void;
 
@@ -193,15 +194,19 @@ export class UIScene extends Phaser.Scene {
       fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(1);
 
-    // Affichage du taux de production passive (en dessous, vert)
-    const productionRate = (this.registry.get('soulProductionRate') as number) ?? 0.5;
-    const productionMultiplier = (this.registry.get('soulProductionMultiplier') as number) ?? 1.0;
-    const totalProduction = productionRate * productionMultiplier;
-    this.add.text(soulPanelX + 35, soulPanelY + 40, `⚡ +${totalProduction.toFixed(1)} âmes/s`, {
+    // Affichage du taux de production passive (en dessous, vert) - DYNAMIQUE
+    const initialProduction = (this.registry.get('totalSoulProduction') as number) ?? 0.5;
+    const initialGenCount = (this.registry.get('generatorCount') as number) ?? 0;
+
+    this.productionText = this.add.text(soulPanelX + 35, soulPanelY + 40, this.getProductionText(initialProduction, initialGenCount), {
       ...this.txtStyle(14),
       color: '#7bed9f',
       fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(1);
+
+    // Écouter les changements de production
+    this.registry.events.on('changedata-totalSoulProduction', this.updateProductionText, this);
+    this.registry.events.on('changedata-generatorCount', this.updateProductionText, this);
 
     // === PANNEAU VAGUE (marge droite, au-dessus de la zone de jeu) ===
     const rightPanelX = UI_LEFT_MARGIN + GAME_AREA_WIDTH + 10;
@@ -1199,5 +1204,26 @@ export class UIScene extends Phaser.Scene {
       duration: 400,
       ease: 'Quad.Out'
     });
+  }
+
+  // Génère le texte de production avec le nombre de générateurs
+  private getProductionText(production: number, generatorCount: number): string {
+    if (generatorCount === 0) {
+      return `⚡ +${production.toFixed(1)} âmes/s (base)`;
+    } else if (generatorCount === 1) {
+      return `⚡ +${production.toFixed(1)} âmes/s (1 générateur)`;
+    } else {
+      return `⚡ +${production.toFixed(1)} âmes/s (${generatorCount} générateurs)`;
+    }
+  }
+
+  // Met à jour le texte de production quand les valeurs changent
+  private updateProductionText(): void {
+    if (!this.productionText || !this.productionText.scene) return;
+
+    const production = (this.registry.get('totalSoulProduction') as number) ?? 0.5;
+    const generatorCount = (this.registry.get('generatorCount') as number) ?? 0;
+
+    this.productionText.setText(this.getProductionText(production, generatorCount));
   }
 }

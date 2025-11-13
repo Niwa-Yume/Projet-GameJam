@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { createBonfire } from '../entities/Bonfire';
-import { createSkeletonEnemy } from '../entities/Enemies';
+import { createSkeletonEnemy, createBossSkeletonEnemy } from '../entities/Enemies';
 import { attachHealthBar, updateHealthBar } from '../ui/HealthBar';
 import { SaveSystem } from '../utils/SaveSystem';
 import { GameConstants } from './GameConstants';
@@ -198,6 +198,8 @@ export class GameScene extends Phaser.Scene {
             this.registry.set('barracksCount', 0);
             this.registry.set('soulProductionRate', GameConstants.PASSIVE_SOUL_RATE);
             this.registry.set('soulProductionMultiplier', 1.0);
+            this.registry.set('generatorCount', 0);
+            this.registry.set('totalSoulProduction', GameConstants.PASSIVE_SOUL_RATE);
         }
 
         // Toujours définir ces valeurs (communes aux deux cas)
@@ -256,6 +258,9 @@ export class GameScene extends Phaser.Scene {
 
         // Démarrer la production passive d'âmes (idle game)
         this.startPassiveSoulProduction();
+
+        // Initialiser l'affichage de production
+        this.updateSoulProductionDisplay();
 
         // Démarrer la sauvegarde automatique toutes les 30 secondes
         this.autoSaveTimer = this.time.addEvent({
@@ -1006,6 +1011,9 @@ export class GameScene extends Phaser.Scene {
         attachHealthBar(this, gen);
         gen.setInteractive({ useHandCursor: true });
 
+        // Mettre à jour l'affichage de production
+        this.updateSoulProductionDisplay();
+
         const baseYield = GameConstants.GENERATOR_YIELD;
         const genTimer = this.time.addEvent({
             delay: GameConstants.GENERATOR_TICK_MS,
@@ -1043,6 +1051,9 @@ export class GameScene extends Phaser.Scene {
                 genContainer.destroy();
             }
             this.generators.remove(gen, false, false);
+
+            // Mettre à jour l'affichage de production
+            this.updateSoulProductionDisplay();
         });
     }
 
@@ -2307,7 +2318,37 @@ export class GameScene extends Phaser.Scene {
         const startCell = this.pickSpawnCell();
         const sx = startCell ? this.cellToWorld(startCell.cx, startCell.cy).x : -16;
         const sy = startCell ? this.cellToWorld(startCell.cx, startCell.cy).y : Phaser.Math.Between(32, this.game.canvas.height - 32);
-        const enemy = this.createSkeletonEnemy(sx, sy);
+
+        // Vérifier si c'est une vague boss (toutes les 5 vagues)
+        const currentWave = (this.registry.get('wave') as number) ?? 1;
+        const isBossWave = currentWave % GameConstants.BOSS_WAVE_INTERVAL === 0;
+
+        let enemy: Phaser.GameObjects.Image;
+
+        // Sur les vagues boss, spawn un mini-boss au lieu d'un ennemi normal toutes les 5 spawns
+        if (isBossWave && this.waveSpawnsRemaining % 5 === 0) {
+            enemy = createBossSkeletonEnemy(this, sx, sy, GameConstants.BOSS_SIZE_MULTIPLIER);
+
+            // Marquer comme boss avec HP et caractéristiques augmentées
+            enemy.setData('isBoss', true);
+            enemy.setData('maxHp', GameConstants.BOSS_HP_MULTIPLIER); // Ratio de HP
+            enemy.setData('currentHp', GameConstants.BOSS_HP_MULTIPLIER);
+            enemy.setData('dpsMultiplier', GameConstants.BOSS_DPS_MULTIPLIER);
+            enemy.setData('speedMultiplier', GameConstants.BOSS_SPEED_MULTIPLIER);
+
+            console.log(`💀 MINI-BOSS SPAWNÉ ! Vague ${currentWave}, HP x${GameConstants.BOSS_HP_MULTIPLIER}, Vitesse x${GameConstants.BOSS_SPEED_MULTIPLIER}`);
+
+            // Notification visuelle
+            this.game.events.emit('notify', `💀 MINI-BOSS APPARU ! 💀`, 'error');
+        } else {
+            enemy = this.createSkeletonEnemy(sx, sy);
+            enemy.setData('isBoss', false);
+            enemy.setData('maxHp', 1);
+            enemy.setData('currentHp', 1);
+            enemy.setData('dpsMultiplier', 1);
+            enemy.setData('speedMultiplier', 1);
+        }
+
         this.enemies.add(enemy);
 
         // Calcul du chemin vers le sanctuaire
@@ -2327,7 +2368,7 @@ export class GameScene extends Phaser.Scene {
         enemy.setData('pathIndex', 0);
         enemy.setData('target', undefined);
 
-        // Initialiser la vitesse
+        // Initialiser la vitesse (avec multiplicateur pour les boss)
         this.updateEnemyVelocityAlongPath(enemy);
 
         // Décompte des spawns restants si vague en cours
@@ -2469,9 +2510,12 @@ export class GameScene extends Phaser.Scene {
             }
 
             if (target && target.active) {
-                // Infliger des dégâts
+                // Infliger des dégâts (avec multiplicateur pour les boss)
+                const dpsMultiplier = (enemy.getData('dpsMultiplier') as number) ?? 1;
+                const finalDps = GameConstants.ENEMY_DPS * dpsMultiplier;
+
                 const hpB = (target.getData('hp') as number) ?? 0;
-                const newHp = hpB - GameConstants.ENEMY_DPS * dt;
+                const newHp = hpB - finalDps * dt;
                 target.setData('hp', newHp);
                 this.updateHealthBar(target);
                 if (newHp <= 0) {
@@ -2672,17 +2716,82 @@ export class GameScene extends Phaser.Scene {
         bulletObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile | Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody,
         enemyObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile | Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody
     ): void {
-        console.log(`💥 COLLISION DÉTECTÉE ! Projectile touche ennemi`);
         const bulletGO = this.extractGO(bulletObj) as Phaser.GameObjects.GameObject;
         const enemyGO = this.extractGO(enemyObj) as Phaser.GameObjects.GameObject;
-        // Retirer d'abord des groupes (du display list aussi), puis destroy
+
+        // Détruire le projectile
         if (this.bullets.contains(bulletGO as any)) this.bullets.remove(bulletGO as any, true, false);
+        bulletGO.destroy();
+
+        // Vérifier si c'est un boss
+        const isBoss = enemyGO.getData('isBoss') as boolean;
+        const currentHp = (enemyGO.getData('currentHp') as number) ?? 1;
+        const maxHp = (enemyGO.getData('maxHp') as number) ?? 1;
+
+        if (isBoss) {
+            // Le boss perd 1 HP
+            const newHp = currentHp - 1;
+            enemyGO.setData('currentHp', newHp);
+
+            // Flash rouge pour indiquer le hit
+            const enemy = enemyGO as Phaser.GameObjects.Image;
+            this.tweens.add({
+                targets: enemy,
+                tint: 0xff0000,
+                duration: 100,
+                yoyo: true,
+                onComplete: () => {
+                    enemy.clearTint();
+                }
+            });
+
+            console.log(`💥 BOSS TOUCHÉ ! HP: ${newHp}/${maxHp}`);
+
+            // Si le boss a encore des HP, ne pas le détruire
+            if (newHp > 0) {
+                return;
+            }
+
+            // Boss mort - récompense multipliée
+            console.log(`💀 MINI-BOSS VAINCU ! 💀`);
+            this.game.events.emit('notify', `💀 MINI-BOSS VAINCU ! 💀`, 'success');
+        }
+
+        // Détruire l'ennemi (normal ou boss à 0 HP)
         if (this.enemies.contains(enemyGO as any)) this.enemies.remove(enemyGO as any, true, false);
         enemyGO.destroy();
-        bulletGO.destroy();
-        this.addShards(GameConstants.SHARD_REWARD);
+
+        // Récompense dynamique basée sur la vague
+        const currentWave = (this.registry.get('wave') as number) ?? 1;
+        let reward = this.calculateEnemyReward(currentWave);
+
+        // Multiplier la récompense pour les boss
+        if (isBoss) {
+            reward *= GameConstants.BOSS_REWARD_MULTIPLIER;
+            console.log(`✅ Récompense BOSS: ${reward} âmes (x${GameConstants.BOSS_REWARD_MULTIPLIER})`);
+        }
+
+        this.addShards(reward);
+
         this.decWaveRemaining(1);
-        console.log(`✅ Ennemi tué ! Ennemis restants: ${this.enemies.getLength()}`);
+        console.log(`✅ Ennemi tué ! Récompense: ${reward} âmes, Ennemis restants: ${this.enemies.getLength()}`);
+    }
+
+    // Calcule la récompense en âmes pour un ennemi en fonction de la vague
+    private calculateEnemyReward(wave: number): number {
+        // Récompense de base
+        let reward = GameConstants.SHARD_REWARD;
+
+        // Augmentation progressive par vague
+        reward += Math.floor((wave - 1) * 1.5);
+
+        // Bonus toutes les 5 vagues
+        const bonusMultiplier = Math.floor(wave / 5);
+        if (bonusMultiplier > 0) {
+            reward += bonusMultiplier * 5;
+        }
+
+        return reward;
     }
 
     private extractGO(
@@ -2743,10 +2852,31 @@ export class GameScene extends Phaser.Scene {
         // Incrémente la vague
         const currentWave = ((this.registry.get('wave') as number) ?? 1) + 1;
         this.registry.set('wave', currentWave);
-        // Met à jour difficulté
-        this.enemySpeed = GameConstants.ENEMY_SPEED + (currentWave - 1) * 10;
-        const interval = Math.max(500, 1000 - (currentWave - 1) * 50);
-        const count = 10 + (currentWave - 1) * 2;
+
+        // === CALCUL DE LA DIFFICULTÉ ===
+        // Augmentation de base par vague
+        const baseSpeedIncrease = (currentWave - 1) * 10;
+
+        // Bonus de vitesse toutes les 5 vagues (augmentation significative)
+        const waveGroup = Math.floor((currentWave - 1) / 5);
+        const speedBonus = waveGroup * 25; // +25 vitesse tous les 5 niveaux
+
+        // Vitesse finale des ennemis
+        this.enemySpeed = GameConstants.ENEMY_SPEED + baseSpeedIncrease + speedBonus;
+
+        // Intervalle de spawn (plus rapide = plus d'ennemis)
+        const baseInterval = Math.max(300, 1000 - (currentWave - 1) * 40);
+        const intervalBonus = waveGroup > 0 ? Math.max(0, 150 * waveGroup) : 0;
+        const interval = Math.max(200, baseInterval - intervalBonus);
+
+        // Nombre d'ennemis par vague
+        const baseCount = 10 + (currentWave - 1) * 2;
+        const countBonus = waveGroup * 5; // +5 ennemis tous les 5 niveaux
+        const count = baseCount + countBonus;
+
+        // Log pour debug
+        console.log(`🌊 Vague ${currentWave} - Vitesse: ${this.enemySpeed}, Intervalle: ${interval}ms, Ennemis: ${count}, Groupe: ${waveGroup + 1}`);
+
         this.waveSpawning = true;
         this.waveSpawnsRemaining = count;
         // Progression UI
@@ -2855,7 +2985,12 @@ export class GameScene extends Phaser.Scene {
                             // Retirer proprement du groupe puis détruire
                             if (this.enemies.contains(target as any)) this.enemies.remove(target as any, true, false);
                             target.destroy();
-                            this.addShards(GameConstants.SHARD_REWARD);
+
+                            // Récompense dynamique basée sur la vague
+                            const currentWave = (this.registry.get('wave') as number) ?? 1;
+                            const reward = this.calculateEnemyReward(currentWave);
+                            this.addShards(reward);
+
                             this.decWaveRemaining(1);
                             a.setData('nextAtk', now + def.atkRateMs);
                         }
@@ -3128,12 +3263,17 @@ export class GameScene extends Phaser.Scene {
         if (!body) return;
         const path = enemy.getData('path') as { x: number; y: number }[] | null;
         const idx = (enemy.getData('pathIndex') as number) ?? 0;
+
+        // Appliquer le multiplicateur de vitesse pour les boss
+        const speedMultiplier = (enemy.getData('speedMultiplier') as number) ?? 1;
+        const finalSpeed = this.enemySpeed * speedMultiplier;
+
         if (!path || path.length === 0 || idx >= path.length) {
-            this.seek(body, enemy.x, enemy.y, this.sanctuaryPos.x, this.sanctuaryPos.y, this.enemySpeed);
+            this.seek(body, enemy.x, enemy.y, this.sanctuaryPos.x, this.sanctuaryPos.y, finalSpeed);
             return;
         }
         const wp = path[idx];
-        this.seek(body, enemy.x, enemy.y, wp.x, wp.y, this.enemySpeed);
+        this.seek(body, enemy.x, enemy.y, wp.x, wp.y, finalSpeed);
     }
 
     private followPathStep(enemy: EnemyGO): void {
@@ -3194,10 +3334,11 @@ export class GameScene extends Phaser.Scene {
             delay: 1000,
             loop: true,
             callback: () => {
-                const rate = this.soulProductionRate;
-                const multiplier = this.soulProductionMultiplier;
-                const production = rate * multiplier;
+                const production = this.calculateTotalSoulProduction();
                 this.addShards(production);
+
+                // Mettre à jour l'affichage
+                this.updateSoulProductionDisplay();
             },
             callbackScope: this
         });
@@ -3209,6 +3350,39 @@ export class GameScene extends Phaser.Scene {
                 this.passiveSoulTimer = undefined;
             }
         });
+    }
+
+    // Calcule la production totale d'âmes par seconde basée sur les générateurs
+    private calculateTotalSoulProduction(): number {
+        const generatorCount = this.generators.getLength();
+
+        if (generatorCount === 0) {
+            // Pas de générateur = production de base uniquement
+            return this.soulProductionRate * this.soulProductionMultiplier;
+        }
+
+        // Chaque générateur contribue à la production
+        let totalProduction = 0;
+
+        for (const obj of this.generators.getChildren()) {
+            const gen = obj as Phaser.GameObjects.Rectangle;
+            const yieldMul = (gen.getData('yieldMul') as number) ?? 1;
+
+            // Production par générateur = taux de base × multiplicateur du générateur × multiplicateur global
+            const genProduction = this.soulProductionRate * yieldMul * this.soulProductionMultiplier;
+            totalProduction += genProduction;
+        }
+
+        return totalProduction;
+    }
+
+    // Met à jour l'affichage de la production dans le registre pour l'UI
+    private updateSoulProductionDisplay(): void {
+        const generatorCount = this.generators.getLength();
+        const totalProduction = this.calculateTotalSoulProduction();
+
+        this.registry.set('generatorCount', generatorCount);
+        this.registry.set('totalSoulProduction', totalProduction);
     }
 
     // Méthode publique pour améliorer le taux de production (idle game upgrade)
@@ -3410,6 +3584,9 @@ export class GameScene extends Phaser.Scene {
             }
 
             this.game.events.emit('notify', `Générateur amélioré au niveau ${newLevel} (+${(yieldMul * 100).toFixed(0)}% production)`, 'success');
+
+            // Mettre à jour l'affichage de production
+            this.updateSoulProductionDisplay();
         }
 
         return true;
