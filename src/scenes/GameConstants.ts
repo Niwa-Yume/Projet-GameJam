@@ -79,6 +79,9 @@ export class GameConstants {
     }
   };
 
+  // ========== VENTE DE BÂTIMENTS ==========
+  static readonly SELL_REFUND_PERCENTAGE = 0.75; // 75% du coût de base remboursé
+
   // ========== SAUVEGARDE ==========
   static readonly AUTO_SAVE_INTERVAL_MS = 30000; // 30 secondes
 }

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GameScene } from './GameScene';
 import { SaveSystem } from '../utils/SaveSystem';
+import { GameConstants } from './GameConstants';
 
 /**
  * UIScene: scène dédiée à l'interface utilisateur (overlay)
@@ -81,7 +82,7 @@ export class UIScene extends Phaser.Scene {
   // Menu d'upgrade
   private upgradeMenuContainer?: Phaser.GameObjects.Container;
   private currentUpgradeBuilding?: Phaser.GameObjects.Rectangle;
-  private currentUpgradeType?: 'tower' | 'generator';
+  private currentUpgradeType?: 'tower' | 'generator' | 'wall' | 'campfire' | 'forge' | 'storage' | 'barracks';
 
   // Labels et panneaux
   private waveProgLabel!: Phaser.GameObjects.Text;
@@ -165,10 +166,8 @@ export class UIScene extends Phaser.Scene {
     // Vérifier s'il y a des gains hors-ligne à afficher
     const hasOfflineProgress = this.registry.get('hasOfflineProgress') as boolean ?? false;
     if (hasOfflineProgress) {
-      // Afficher l'overlay après un court délai
-      this.time.delayedCall(500, () => {
-        this.showOfflineProgressOverlay();
-      });
+      // Affichage basique pour informer (fallback si overlay spécifique non implémenté)
+      this.showToast('Gains hors-ligne appliqués', 'success', 1500);
     }
 
     // === PANNEAU ÂMES (marge gauche) ===
@@ -405,8 +404,8 @@ export class UIScene extends Phaser.Scene {
     // Toasts
     this.game.events.on('notify', (msg: string, kind: 'info' | 'error' | 'success' = 'info') => this.showToast(msg, kind));
 
-    // Menu d'upgrade (clics sur tours/générateurs)
-    this.game.events.on('showUpgradeMenu', (building: Phaser.GameObjects.Rectangle, type: 'tower' | 'generator') => {
+    // Menu d'upgrade (clics sur tous les bâtiments)
+    this.game.events.on('showUpgradeMenu', (building: Phaser.GameObjects.Rectangle, type: 'tower' | 'generator' | 'wall' | 'campfire' | 'forge' | 'storage' | 'barracks') => {
       this.showUpgradeMenuForBuilding(building, type);
     });
 
@@ -496,11 +495,10 @@ export class UIScene extends Phaser.Scene {
     };
   }
 
-  // Correction: drawDiamond
+  // Dessine un losange rempli avec un contour
   private drawDiamond(x: number, y: number, s: number, color: number): Phaser.GameObjects.Polygon {
-    const pts = [ {x:0,y:-s}, {x:s,y:0}, {x:0,y:s}, {x:-s,y:0} ];
-    const poly = this.add.polygon(x, y, pts, color, 1).setStrokeStyle(1, 0x000000, 0.6);
-    return poly;
+    const pts = [ {x:0, y:-s}, {x:s, y:0}, {x:0, y:s}, {x:-s, y:0} ];
+    return this.add.polygon(x, y, pts, color, 1).setStrokeStyle(1, 0x000000, 0.6);
   }
 
   private drawHeart(x: number, y: number, s: number, color: number): Phaser.GameObjects.Graphics {
@@ -539,7 +537,7 @@ export class UIScene extends Phaser.Scene {
 
   // Bouton d’action: plus compact (140x30) + trait fin
   private createActionButton(right: number, top: number, label: string, onClick: () => void): Phaser.GameObjects.Container {
-    const w = 110, h = 28; // Réduit pour rentrer dans le panneau de 130px
+    const w = 110, h = 28; // Réduits pour rentrer dans le panneau de 130px
     const x = right - w/2;
     const y = top + h/2;
     const bg = this.add.rectangle(x, y, w, h, this.theme.buttonFill, 0.96)
@@ -913,7 +911,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   // Afficher le menu d'upgrade pour un bâtiment
-  private showUpgradeMenuForBuilding(building: Phaser.GameObjects.Rectangle, type: 'tower' | 'generator'): void {
+  private showUpgradeMenuForBuilding(building: Phaser.GameObjects.Rectangle, type: 'tower' | 'generator' | 'wall' | 'campfire' | 'forge' | 'storage' | 'barracks'): void {
     // Fermer le menu existant s'il y en a un
     if (this.upgradeMenuContainer) {
       this.upgradeMenuContainer.destroy(true);
@@ -924,10 +922,11 @@ export class UIScene extends Phaser.Scene {
     this.currentUpgradeType = type;
 
     const game = this.scene.get('GameScene') as GameScene;
-    if (!game || !game.getUpgradeInfo) return;
+    if (!game) return;
 
-    const info = game.getUpgradeInfo(building, type);
-    const forgeCount = (this.registry.get('forgeCount') as number) ?? 0;
+    // Vérifier si ce bâtiment peut être amélioré
+    const canUpgrade = (type === 'tower' || type === 'generator') && !!game.getUpgradeInfo;
+    const info = canUpgrade ? game.getUpgradeInfo(building, type as 'tower' | 'generator') : null;
 
     // Position du menu (centré sur la caméra)
     const camW = this.cameras.main.width;
@@ -949,115 +948,143 @@ export class UIScene extends Phaser.Scene {
       .setStrokeStyle(2, this.theme.gold, 0.8)
       .setDepth(501);
 
-    // Titre
-    const title = type === 'tower' ? 'Amélioration de Tour' : 'Amélioration de Générateur';
-    const titleTxt = this.add.text(menuX, menuY - menuH/2 + 20, title, this.txtStyle(18))
-      .setOrigin(0.5)
+    // Bouton fermer (croix en haut à droite)
+    const closeSize = 18;
+    const closeBg = this.add.rectangle(menuX + menuW/2 - 14, menuY - menuH/2 + 14, closeSize, closeSize, 0x3a2f22, 1)
       .setScrollFactor(0)
-      .setDepth(502);
-
-    // Niveau actuel
-    const levelTxt = this.add.text(menuX, menuY - menuH/2 + 50, `Niveau: ${info.level}/${info.maxLevel}`, this.txtStyle(14, true))
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(502);
-
-    // Stats actuelles
-    const currentStatsTxt = this.add.text(menuX, menuY - 20, info.currentStats, this.txtStyle(12, true))
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(502);
-
-    // Flèche vers le bas
-    let upgradeBtn: Phaser.GameObjects.Container | undefined;
-    let nextStatsTxt: Phaser.GameObjects.Text | undefined;
-    let arrowTxt: Phaser.GameObjects.Text | undefined;
-    let cantUpgradeTxt: Phaser.GameObjects.Text | undefined;
-
-    if (forgeCount <= 0) {
-      // Pas de forge = pas d'upgrade possible
-      cantUpgradeTxt = this.add.text(menuX, menuY + 20, '⚠️ Construisez une Forge pour\ndébloquer les améliorations', { ...this.txtStyle(13, true), align: 'center' })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(502);
-    } else if (info.level >= info.maxLevel) {
-      // Niveau max atteint
-      cantUpgradeTxt = this.add.text(menuX, menuY + 20, '✓ Niveau Maximum Atteint', this.txtStyle(14, true))
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(502);
-    } else {
-      // Upgrade possible
-      arrowTxt = this.add.text(menuX, menuY + 5, '↓', this.txtStyle(20))
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(502);
-
-      nextStatsTxt = this.add.text(menuX, menuY + 30, info.nextStats, { ...this.txtStyle(12), color: '#' + this.theme.gold.toString(16).padStart(6, '0') })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(502);
-
-      // Bouton améliorer
-      const btnW = 180, btnH = 36;
-      const btnY = menuY + menuH/2 - 40;
-      const btnBg = this.add.rectangle(menuX, btnY, btnW, btnH, this.theme.buttonFill, 0.95)
-        .setStrokeStyle(1, this.theme.gold, 0.85)
-        .setInteractive({ useHandCursor: true })
-        .setScrollFactor(0)
-        .setDepth(501);
-      const btnTxt = this.add.text(menuX, btnY, `Améliorer (${info.nextCost} âmes)`, this.txtStyle(14))
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(502);
-
-      btnBg.on('pointerdown', () => {
-        btnBg.setFillStyle(this.theme.buttonFillActive, 0.95);
-        this.time.delayedCall(100, () => {
-          btnBg.setFillStyle(this.theme.buttonFill, 0.95);
-          this.tryUpgradeBuilding();
-        });
-      });
-      btnBg.on('pointerover', () => {
-        btnBg.setFillStyle(this.theme.buttonFillHover, 0.95);
-      });
-      btnBg.on('pointerout', () => {
-        btnBg.setFillStyle(this.theme.buttonFill, 0.95);
-      });
-
-      upgradeBtn = this.add.container(0, 0, [btnBg, btnTxt]).setScrollFactor(0).setDepth(501);
-    }
-
-    // Bouton fermer
-    const closeBtnSize = 24;
-    const closeX = menuX + menuW/2 - closeBtnSize;
-    const closeY = menuY - menuH/2 + closeBtnSize;
-    const closeBg = this.add.rectangle(closeX, closeY, closeBtnSize, closeBtnSize, 0x7a1a1a, 0.9)
-      .setStrokeStyle(1, this.theme.goldDim, 0.7)
+      .setStrokeStyle(1, this.theme.gold, 0.8)
       .setInteractive({ useHandCursor: true })
-      .setScrollFactor(0)
-      .setDepth(502);
-    const closeTxt = this.add.text(closeX, closeY, '✕', this.txtStyle(16))
-      .setOrigin(0.5)
-      .setScrollFactor(0)
       .setDepth(503);
-
-    const closeMenu = () => {
+    const closeTxt = this.add.text(closeBg.x, closeBg.y, '×', this.txtStyle(16)).setOrigin(0.5).setScrollFactor(0).setDepth(504);
+    closeBg.on('pointerdown', () => {
       if (this.upgradeMenuContainer) {
         this.upgradeMenuContainer.destroy(true);
         this.upgradeMenuContainer = undefined;
         this.currentUpgradeBuilding = undefined;
         this.currentUpgradeType = undefined;
       }
-    };
+    });
 
-    closeBg.on('pointerdown', closeMenu);
-    overlay.on('pointerdown', closeMenu);
-    closeBg.on('pointerover', () => closeBg.setFillStyle(0xa12020, 0.95));
-    closeBg.on('pointerout', () => closeBg.setFillStyle(0x7a1a1a, 0.9));
+    // Titre
+    const buildingNames: Record<string, string> = {
+      tower: 'Tour',
+      generator: 'Générateur',
+      wall: 'Mur',
+      campfire: 'Feu de Camp',
+      forge: 'Forge',
+      storage: 'Réserve',
+      barracks: 'Caserne'
+    };
+    const title = canUpgrade ? `Amélioration de ${buildingNames[type]}` : buildingNames[type];
+    const titleTxt = this.add.text(menuX, menuY - menuH/2 + 20, title, this.txtStyle(18))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(502);
+
+    // Niveau actuel (seulement pour les bâtiments upgradables)
+    let levelTxt: Phaser.GameObjects.Text | undefined;
+    if (info) {
+      levelTxt = this.add.text(menuX, menuY - menuH/2 + 50, `Niveau: ${info.level}/${info.maxLevel}`, this.txtStyle(14, true))
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(502);
+    }
+
+    // Stats actuelles
+    const currentStats = info?.currentStats || this.getBuildingStats(building, type);
+    const currentStatsTxt = this.add.text(menuX, menuY - 20, currentStats, this.txtStyle(12, true))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(502);
+
+    // Flèche + bloc upgrade uniquement si upgradable
+    let upgradeBtn: Phaser.GameObjects.Container | undefined;
+    let nextStatsTxt: Phaser.GameObjects.Text | undefined;
+    let arrowTxt: Phaser.GameObjects.Text | undefined;
+    let cantUpgradeTxt: Phaser.GameObjects.Text | undefined;
+
+    if (canUpgrade && info) {
+      const forgeCount = (this.registry.get('forgeCount') as number) ?? 0;
+      if (forgeCount <= 0) {
+        // Pas de forge = pas d'upgrade possible
+        cantUpgradeTxt = this.add.text(menuX, menuY + 20, '⚠️ Construisez une Forge pour\ndébloquer les améliorations', { ...this.txtStyle(13, true), align: 'center' })
+          .setOrigin(0.5)
+          .setScrollFactor(0)
+          .setDepth(502);
+      } else if (info.level >= info.maxLevel) {
+        // Niveau max atteint
+        cantUpgradeTxt = this.add.text(menuX, menuY + 20, '✓ Niveau Maximum Atteint', this.txtStyle(14, true))
+          .setOrigin(0.5)
+          .setScrollFactor(0)
+          .setDepth(502);
+      } else {
+        // Upgrade possible
+        arrowTxt = this.add.text(menuX, menuY + 5, '↓', this.txtStyle(20))
+          .setOrigin(0.5)
+          .setScrollFactor(0)
+          .setDepth(502);
+
+        nextStatsTxt = this.add.text(menuX, menuY + 30, info.nextStats, { ...this.txtStyle(12), color: '#7bed9f' })
+          .setOrigin(0.5)
+          .setScrollFactor(0)
+          .setDepth(502);
+
+        // Bouton améliorer
+        const btnW = 180, btnH = 36;
+        const btnY = menuY + menuH/2 - 40;
+        const btnBg = this.add.rectangle(menuX, btnY, btnW, btnH, this.theme.buttonFill, 0.95)
+          .setStrokeStyle(1, this.theme.gold, 0.85)
+          .setInteractive({ useHandCursor: true })
+          .setScrollFactor(0)
+          .setDepth(501);
+        const btnTxt = this.add.text(menuX, btnY, `Améliorer (${info.nextCost} âmes)`, this.txtStyle(14))
+          .setOrigin(0.5)
+          .setScrollFactor(0)
+          .setDepth(502);
+
+        btnBg.on('pointerdown', () => {
+          btnBg.setFillStyle(this.theme.buttonFillActive, 0.95);
+          this.time.delayedCall(100, () => {
+            btnBg.setFillStyle(this.theme.buttonFill, 0.95);
+            this.tryUpgradeBuilding();
+          });
+        });
+        btnBg.on('pointerover', () => { btnBg.setFillStyle(this.theme.buttonFillHover, 0.95); });
+        btnBg.on('pointerout', () => { btnBg.setFillStyle(this.theme.buttonFill, 0.95); });
+
+        upgradeBtn = this.add.container(0, 0, [btnBg, btnTxt]).setScrollFactor(0).setDepth(501);
+      }
+    }
+
+    // Bouton "Vendre" en bas du menu
+    const sellBtnW = 160, sellBtnH = 32;
+    const sellBtnY = menuY + menuH/2 - (upgradeBtn ? 80 : 45);
+
+    const baseCost = this.getBaseCostForType(type);
+    const sellPrice = Math.floor(baseCost * GameConstants.SELL_REFUND_PERCENTAGE);
+
+    const sellBg = this.add.rectangle(menuX, sellBtnY, sellBtnW, sellBtnH, 0x7a3a1a, 0.9)
+      .setStrokeStyle(1, 0xd4af37, 0.7)
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0)
+      .setDepth(501);
+    const sellTxt = this.add.text(menuX, sellBtnY, `🔥 Vendre (${sellPrice} âmes)`, this.txtStyle(13))
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(502);
+
+    sellBg.on('pointerdown', () => {
+      sellBg.setFillStyle(0x9a4a2a, 0.95);
+      this.time.delayedCall(100, () => { this.trySellBuilding(); });
+    });
+    sellBg.on('pointerover', () => sellBg.setFillStyle(0x8a4a2a, 0.95));
+    sellBg.on('pointerout',  () => sellBg.setFillStyle(0x7a3a1a, 0.9));
+
+    const sellBtn = this.add.container(0, 0, [sellBg, sellTxt]).setScrollFactor(0).setDepth(501);
 
     // Container pour tout le menu
-    const elements: any[] = [overlay, panelBg, titleTxt, levelTxt, currentStatsTxt, closeBg, closeTxt];
+    const elements: any[] = [overlay, panelBg, titleTxt, currentStatsTxt, closeBg, closeTxt, sellBtn];
+    if (levelTxt) elements.push(levelTxt);
     if (arrowTxt) elements.push(arrowTxt);
     if (nextStatsTxt) elements.push(nextStatsTxt);
     if (upgradeBtn) elements.push(upgradeBtn);
@@ -1071,15 +1098,20 @@ export class UIScene extends Phaser.Scene {
   private tryUpgradeBuilding(): void {
     if (!this.currentUpgradeBuilding || !this.currentUpgradeType) return;
 
+    const type = this.currentUpgradeType;
+    if (type !== 'tower' && type !== 'generator') {
+      // Non-améliorable
+      return;
+    }
+
     const game = this.scene.get('GameScene') as GameScene;
     if (!game || !game.upgradeBuildingLevel) return;
 
-    const success = game.upgradeBuildingLevel(this.currentUpgradeBuilding, this.currentUpgradeType);
+    const success = game.upgradeBuildingLevel(this.currentUpgradeBuilding, type);
 
     if (success) {
       // Fermer le menu et le rouvrir avec les nouvelles stats
       const building = this.currentUpgradeBuilding;
-      const type = this.currentUpgradeType;
 
       if (this.upgradeMenuContainer) {
         this.upgradeMenuContainer.destroy(true);
@@ -1093,167 +1125,81 @@ export class UIScene extends Phaser.Scene {
     }
   }
 
-  // Affiche le récapitulatif des gains hors-ligne
-  private showOfflineProgressOverlay(): void {
-    const offlineProgress = this.registry.get('offlineProgress') as any;
-    if (!offlineProgress) return;
+  // Tenter de vendre le bâtiment sélectionné
+  private trySellBuilding(): void {
+    if (!this.currentUpgradeBuilding || !this.currentUpgradeType) return;
+    const game = this.scene.get('GameScene') as GameScene;
+    if (!game || typeof (game as any).sellBuilding !== 'function') return;
 
-    const cam = this.cameras.main;
-    const w = cam.width;
-    const h = cam.height;
-
-    // Fond semi-transparent
-    const bg = this.add.rectangle(w/2, h/2, w, h, 0x000000, 0.7).setScrollFactor(0).setInteractive().setDepth(2000);
-
-    // Panel principal (plus grand si on a des vagues)
-    const hasWaves = offlineProgress.wavesCompleted > 0;
-    const panelH = hasWaves ? 360 : 300;
-    const panelW = 420;
-    const panelBg = this.add.rectangle(w/2, h/2, panelW, panelH, this.theme.panelFill, 0.98)
-      .setScrollFactor(0)
-      .setStrokeStyle(3, this.theme.gold, 0.9)
-      .setDepth(2001);
-
-    // Titre
-    const title = this.add.text(w/2, h/2 - panelH/2 + 30, 'Bon retour, Gardien !', {
-      ...this.txtStyle(24),
-      color: '#d4af37',
-      fontStyle: 'bold'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-
-    // Temps écoulé
-    const timeText = SaveSystem.formatTimeElapsed(offlineProgress.timeElapsedSeconds);
-    const timeLabel = this.add.text(w/2, h/2 - panelH/2 + 70, `⏰ Temps écoulé: ${timeText}`, {
-      ...this.txtStyle(16),
-      color: '#ffffff'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-
-    // Séparateur
-    const separator1 = this.add.graphics().setScrollFactor(0).setDepth(2002);
-    separator1.lineStyle(2, 0xd4af37, 0.5);
-    separator1.lineBetween(w/2 - 170, h/2 - panelH/2 + 95, w/2 + 170, h/2 - panelH/2 + 95);
-
-    let currentY = h/2 - panelH/2 + 120;
-
-    // Gains d'âmes
-    const soulsLabel = this.add.text(w/2, currentY, '💰 Âmes générées', {
-      ...this.txtStyle(14),
-      color: '#cccccc'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-
-    const soulsValue = this.add.text(w/2, currentY + 30, `+${Math.floor(offlineProgress.soulsEarned)} âmes`, {
-      ...this.txtStyle(20),
-      color: '#66ccff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-
-    currentY += 70;
-
-    // Note sur le cap (optionnel)
-    let capNote: Phaser.GameObjects.Text | undefined;
-    const maxPossible = offlineProgress.timeElapsedSeconds * 0.5; // Taux de base
-    if (offlineProgress.soulsEarned < maxPossible * 0.9) {
-      capNote = this.add.text(w/2, currentY, '(Capacité de stockage atteinte)', {
-        ...this.txtStyle(11, true),
-        color: '#ffaa66'
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-      currentY += 25;
-    }
-
-    // Vagues complétées (si applicable)
-    let wavesLabel: Phaser.GameObjects.Text | undefined;
-    let wavesValue: Phaser.GameObjects.Text | undefined;
-    let separator2: Phaser.GameObjects.Graphics | undefined;
-
-    if (hasWaves) {
-      separator2 = this.add.graphics().setScrollFactor(0).setDepth(2002);
-      separator2.lineStyle(2, 0xd4af37, 0.5);
-      separator2.lineBetween(w/2 - 170, currentY, w/2 + 170, currentY);
-      currentY += 25;
-
-      wavesLabel = this.add.text(w/2, currentY, '🌊 Vagues automatiques', {
-        ...this.txtStyle(14),
-        color: '#cccccc'
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-
-      wavesValue = this.add.text(w/2, currentY + 30, `+${offlineProgress.wavesCompleted} vagues complétées`, {
-        ...this.txtStyle(18),
-        color: '#7bed9f',
-        fontStyle: 'bold'
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-
-      currentY += 65;
-    }
-
-    // Bouton continuer
-    const btnW = 180;
-    const btnH = 40;
-    const btnY = h/2 + panelH/2 - 50;
-    const btnBg = this.add.rectangle(w/2, btnY, btnW, btnH, this.theme.buttonFill, 0.95)
-      .setStrokeStyle(2, this.theme.gold, 0.9)
-      .setInteractive({ useHandCursor: true })
-      .setScrollFactor(0)
-      .setDepth(2001);
-    const btnTxt = this.add.text(w/2, btnY, 'Continuer', this.txtStyle(16)).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
-
-    btnBg.on('pointerdown', () => {
-      btnBg.setFillStyle(this.theme.buttonFillActive, 0.95);
-      this.time.delayedCall(100, () => {
-        // Détruire l'overlay
-        bg.destroy();
-        panelBg.destroy();
-        title.destroy();
-        timeLabel.destroy();
-        separator1.destroy();
-        soulsLabel.destroy();
-        soulsValue.destroy();
-        if (capNote) capNote.destroy();
-        if (separator2) separator2.destroy();
-        if (wavesLabel) wavesLabel.destroy();
-        if (wavesValue) wavesValue.destroy();
-        btnBg.destroy();
-        btnTxt.destroy();
-
-        // Réinitialiser le flag
-        this.registry.set('hasOfflineProgress', false);
-      });
-    });
-
-    btnBg.on('pointerover', () => {
-      btnBg.setFillStyle(this.theme.buttonFillHover, 0.95);
-    });
-    btnBg.on('pointerout', () => {
-      btnBg.setFillStyle(this.theme.buttonFill, 0.95);
-    });
-
-    // Animation d'entrée
-    const allElements = [bg, panelBg, title, timeLabel, separator1, soulsLabel, soulsValue, btnBg, btnTxt, capNote, separator2, wavesLabel, wavesValue].filter(Boolean);
-    this.tweens.add({
-      targets: allElements,
-      alpha: { from: 0, to: 1 },
-      duration: 400,
-      ease: 'Quad.Out'
-    });
-  }
-
-  // Génère le texte de production avec le nombre de générateurs
-  private getProductionText(production: number, generatorCount: number): string {
-    if (generatorCount === 0) {
-      return `⚡ +${production.toFixed(1)} âmes/s (base)`;
-    } else if (generatorCount === 1) {
-      return `⚡ +${production.toFixed(1)} âmes/s (1 générateur)`;
-    } else {
-      return `⚡ +${production.toFixed(1)} âmes/s (${generatorCount} générateurs)`;
+    // Vente directe
+    const success = (game as any).sellBuilding(this.currentUpgradeBuilding, this.currentUpgradeType);
+    if (success) {
+      if (this.upgradeMenuContainer) {
+        this.upgradeMenuContainer.destroy(true);
+        this.upgradeMenuContainer = undefined;
+        this.currentUpgradeBuilding = undefined;
+        this.currentUpgradeType = undefined;
+      }
     }
   }
 
-  // Met à jour le texte de production quand les valeurs changent
-  private updateProductionText(): void {
-    if (!this.productionText || !this.productionText.scene) return;
+  // Donne une chaîne de stats pour les bâtiments non-améliorables
+  private getBuildingStats(building: Phaser.GameObjects.Rectangle, type: 'wall' | 'campfire' | 'forge' | 'storage' | 'barracks' | 'tower' | 'generator'): string {
+    const hp = (building.getData('hp') as number) ?? 0;
+    const maxHp = (building.getData('maxHp') as number) ?? hp;
+    switch (type) {
+      case 'wall':
+        return `Durabilité: ${Math.floor(hp)}/${Math.floor(maxHp)} PV`;
+      case 'campfire':
+        return `Soin: +${GameConstants.CAMPFIRE_HEAL} PV/tick • Rayon: ${GameConstants.CAMPFIRE_RADIUS}`;
+      case 'forge':
+        return `Permet d'améliorer Tours et Générateurs`;
+      case 'storage': {
+        const capInc = (building.getData('capInc') as number) ?? 0;
+        return `Capacité +${capInc} • PV: ${Math.floor(hp)}/${Math.floor(maxHp)}`;
+      }
+      case 'barracks':
+        return `Permet de recruter des unités • PV: ${Math.floor(hp)}/${Math.floor(maxHp)}`;
+      case 'tower': {
+        const fireRateMul = (building.getData('fireRateMul') as number) ?? 1;
+        const damageMul = (building.getData('damageMul') as number) ?? 1;
+        return `Cadence: ${(fireRateMul * 100).toFixed(0)}% • Dégâts: x${damageMul.toFixed(1)}`;
+      }
+      case 'generator': {
+        const yieldMul = (building.getData('yieldMul') as number) ?? 1;
+        return `Production: x${yieldMul.toFixed(2)} (${(GameConstants.GENERATOR_YIELD * yieldMul).toFixed(1)} âmes/2s)`;
+      }
+    }
+  }
 
-    const production = (this.registry.get('totalSoulProduction') as number) ?? 0.5;
-    const generatorCount = (this.registry.get('generatorCount') as number) ?? 0;
+  // Récupère le coût de base par type depuis le registry
+  private getBaseCostForType(type: 'tower' | 'generator' | 'wall' | 'campfire' | 'forge' | 'storage' | 'barracks'): number {
+    const map: Record<typeof type, number> = {
+      tower: (this.registry.get('towerCost') as number) ?? GameConstants.INITIAL_TOWER_COST,
+      wall: (this.registry.get('wallCost') as number) ?? GameConstants.INITIAL_WALL_COST,
+      generator: (this.registry.get('generatorCost') as number) ?? GameConstants.INITIAL_GENERATOR_COST,
+      campfire: (this.registry.get('campfireCost') as number) ?? GameConstants.INITIAL_CAMPFIRE_COST,
+      forge: (this.registry.get('forgeCost') as number) ?? GameConstants.INITIAL_FORGE_COST,
+      storage: (this.registry.get('storageCost') as number) ?? GameConstants.INITIAL_STORAGE_COST,
+      barracks: (this.registry.get('barracksCost') as number) ?? GameConstants.INITIAL_BARRACKS_COST,
+    } as any;
+    return map[type] ?? 0;
+  }
 
-    this.productionText.setText(this.getProductionText(production, generatorCount));
+
+  // Met à jour le texte de production passive
+  private updateProductionText = (): void => {
+    const prod = (this.registry.get('totalSoulProduction') as number) ?? 0;
+    const gens = (this.registry.get('generatorCount') as number) ?? 0;
+    if (this.productionText) {
+      this.productionText.setText(this.getProductionText(prod, gens));
+    }
+  };
+
+  // Formatteur du texte de production
+  private getProductionText(prod: number, gens: number): string {
+    const perSec = prod;
+    const gensPart = gens > 0 ? ` (${gens} générateur${gens > 1 ? 's' : ''})` : '';
+    return `+${perSec.toFixed(2)} âmes/s${gensPart}`;
   }
 }

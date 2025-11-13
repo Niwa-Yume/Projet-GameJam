@@ -787,6 +787,14 @@ export class GameScene extends Phaser.Scene {
         this.walls.add(wall);
         attachHealthBar(this, wall);
 
+        // Interaction clic droit pour vendre
+        wall.setInteractive({ useHandCursor: true });
+        wall.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            if (pointer.rightButtonDown()) {
+                this.showUpgradeMenu(wall, 'wall');
+            }
+        });
+
         wall.once(Phaser.GameObjects.Events.DESTROY, () => {
             // Détruire le container visuel
             if (wallContainer && wallContainer.scene) {
@@ -1528,6 +1536,14 @@ export class GameScene extends Phaser.Scene {
         this.campfires.add(fire);
         attachHealthBar(this, fire);
 
+        // Interaction clic droit pour vendre
+        fire.setInteractive({ useHandCursor: true });
+        fire.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            if (pointer.rightButtonDown()) {
+                this.showUpgradeMenu(fire, 'campfire');
+            }
+        });
+
         fire.once(Phaser.GameObjects.Events.DESTROY, () => {
             aura.destroy();
             embersGraphics.destroy();
@@ -1801,6 +1817,14 @@ export class GameScene extends Phaser.Scene {
         this.forges.add(forge);
         attachHealthBar(this, forge);
 
+        // Interaction clic droit pour vendre
+        forge.setInteractive({ useHandCursor: true });
+        forge.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            if (pointer.rightButtonDown()) {
+                this.showUpgradeMenu(forge, 'forge');
+            }
+        });
+
         // Notifier l'UI qu'une forge existe maintenant
         this.registry.set('forgeCount', this.forges.getLength());
 
@@ -2053,6 +2077,14 @@ export class GameScene extends Phaser.Scene {
         this.storages.add(stor);
         attachHealthBar(this, stor);
 
+        // Interaction clic droit pour vendre
+        stor.setInteractive({ useHandCursor: true });
+        stor.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            if (pointer.rightButtonDown()) {
+                this.showUpgradeMenu(stor, 'storage');
+            }
+        });
+
         // Augmenter la capacité
         const max = (this.registry.get('maxSoulShards') as number) ?? 100;
         const inc = 50;
@@ -2301,6 +2333,14 @@ export class GameScene extends Phaser.Scene {
 
         this.barracks.add(br);
         attachHealthBar(this, br);
+
+        // Interaction clic droit pour vendre
+        br.setInteractive({ useHandCursor: true });
+        br.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            if (pointer.rightButtonDown()) {
+                this.showUpgradeMenu(br, 'barracks');
+            }
+        });
 
         const count = ((this.registry.get('barracksCount') as number) ?? 0) + 1;
         this.registry.set('barracksCount', count);
@@ -3402,7 +3442,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Afficher le menu d'upgrade pour une tour ou un générateur
-    private showUpgradeMenu(building: Phaser.GameObjects.Rectangle, type: 'tower' | 'generator'): void {
+    private showUpgradeMenu(building: Phaser.GameObjects.Rectangle, type: 'tower' | 'generator' | 'wall' | 'campfire' | 'forge' | 'storage' | 'barracks'): void {
         // Notifier l'UI pour afficher le menu d'upgrade
         this.registry.set('upgradeMenuBuilding', { building, type, x: building.x, y: building.y });
         this.game.events.emit('showUpgradeMenu', building, type);
@@ -3633,6 +3673,108 @@ export class GameScene extends Phaser.Scene {
         }
 
         return { level, maxLevel, nextCost, currentStats, nextStats };
+    }
+
+    /**
+     * Vend un bâtiment et rembourse une partie du coût
+     * @param building Le bâtiment à vendre
+     * @param type Le type de bâtiment
+     * @returns true si la vente a réussi
+     */
+    public sellBuilding(building: Phaser.GameObjects.Rectangle, type: 'tower' | 'generator' | 'wall' | 'campfire' | 'forge' | 'storage' | 'barracks'): boolean {
+        // Calculer le remboursement
+        let baseCost = 0;
+        let buildingName = '';
+        let group: Phaser.GameObjects.Group | null = null;
+
+        switch (type) {
+            case 'tower':
+                baseCost = this.towerCost;
+                buildingName = 'Tour';
+                group = this.towers;
+                break;
+            case 'generator':
+                baseCost = this.generatorCost;
+                buildingName = 'Générateur';
+                group = this.generators;
+                // Décrémenter le compteur de générateurs
+                const genCount = (this.registry.get('generatorCount') as number) ?? 0;
+                this.registry.set('generatorCount', Math.max(0, genCount - 1));
+                this.updateSoulProductionDisplay();
+                break;
+            case 'wall':
+                baseCost = this.wallCost;
+                buildingName = 'Mur';
+                group = this.walls;
+                break;
+            case 'campfire':
+                baseCost = this.campfireCost;
+                buildingName = 'Feu de camp';
+                group = this.campfires;
+                break;
+            case 'forge':
+                baseCost = this.forgeCost;
+                buildingName = 'Forge';
+                group = this.forges;
+                // Décrémenter le compteur de forges
+                const forgeCount = (this.registry.get('forgeCount') as number) ?? 0;
+                this.registry.set('forgeCount', Math.max(0, forgeCount - 1));
+                break;
+            case 'storage':
+                baseCost = this.storageCost;
+                buildingName = 'Réserve';
+                group = this.storages;
+                // Réduire la capacité max
+                const capInc = building.getData('capInc') as number;
+                const maxShards = (this.registry.get('maxSoulShards') as number) ?? 100;
+                this.registry.set('maxSoulShards', Math.max(100, maxShards - capInc));
+                break;
+            case 'barracks':
+                baseCost = this.barracksCost;
+                buildingName = 'Caserne';
+                group = this.barracks;
+                // Décrémenter le compteur de casernes
+                const barracksCount = (this.registry.get('barracksCount') as number) ?? 0;
+                this.registry.set('barracksCount', Math.max(0, barracksCount - 1));
+                break;
+        }
+
+        // Calculer le remboursement (75% du coût de base)
+        const refund = Math.floor(baseCost * GameConstants.SELL_REFUND_PERCENTAGE);
+
+        // Rembourser les âmes
+        const currentShards = (this.registry.get('soulShards') as number) ?? 0;
+        this.registry.set('soulShards', currentShards + refund);
+
+        // Supprimer le container s'il existe
+        const container = building.getData('container') as Phaser.GameObjects.Container | undefined;
+        if (container) {
+            container.destroy(true);
+        }
+
+        // Supprimer le bâtiment du groupe
+        if (group) {
+            group.remove(building, true, true);
+        }
+
+        // Supprimer la barre de santé associée
+        const healthBarBg = building.getData('healthBarBg') as Phaser.GameObjects.Graphics | undefined;
+        const healthBarFill = building.getData('healthBarFill') as Phaser.GameObjects.Graphics | undefined;
+        if (healthBarBg) healthBarBg.destroy();
+        if (healthBarFill) healthBarFill.destroy();
+
+        // Détruire le bâtiment lui-même
+        building.destroy();
+
+        // Recalculer la grille et les chemins ennemis
+        this.recomputeGrid();
+        this.recomputeAllEnemyPaths();
+
+        // Notification
+        this.game.events.emit('notify', `${buildingName} vendu pour ${refund} âmes`, 'success');
+        console.log(`💰 ${buildingName} vendu - Remboursement: ${refund} âmes (${(GameConstants.SELL_REFUND_PERCENTAGE * 100)}% de ${baseCost})`);
+
+        return true;
     }
 
     // === MÉTHODES DE SAUVEGARDE DES BÂTIMENTS ===
