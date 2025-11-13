@@ -573,6 +573,13 @@ export class UIScene extends Phaser.Scene {
 
   // Met à jour le style des boutons selon le type sélectionné
   private updateSelectButtons(): void {
+    // Vérifier que les boutons existent avant d'y accéder
+    if (!this.btnTower || !this.btnWall || !this.btnGenerator || !this.btnCampfire ||
+        !this.btnForge || !this.btnStorage || !this.btnBarracks) {
+      console.warn('⚠️ updateSelectButtons: boutons de sélection pas encore créés');
+      return;
+    }
+
     const style = (btn: Phaser.GameObjects.Container, active: boolean) => {
       const bg = btn.list[0] as Phaser.GameObjects.Rectangle;
       bg.setFillStyle(active ? this.theme.buttonFillHover : this.theme.buttonFill, 0.96);
@@ -591,6 +598,12 @@ export class UIScene extends Phaser.Scene {
 
   // Active/désactive le bouton de vague selon l'état
   private setWaveButtonEnabled(enabled: boolean): void {
+    // Vérifier que le bouton existe avant d'y accéder
+    if (!this.waveButton || !this.waveButton.list || !this.waveButton.list[0] || !this.waveButton.list[1]) {
+      console.warn('⚠️ setWaveButtonEnabled: waveButton pas encore créé');
+      return;
+    }
+
     const bg = this.waveButton.list[0] as Phaser.GameObjects.Rectangle;
     const txt = this.waveButton.list[1] as Phaser.GameObjects.Text;
     if (enabled) {
@@ -608,6 +621,12 @@ export class UIScene extends Phaser.Scene {
 
   // Met à jour le bouton de vague selon le mode automatique
   private updateWaveButton(): void {
+    // Vérifier que le bouton existe avant d'y accéder
+    if (!this.waveButton || !this.waveButton.list || !this.waveButton.list[1]) {
+      console.warn('⚠️ updateWaveButton: waveButton pas encore créé');
+      return;
+    }
+
     const autoMode = this.registry.get('autoWaveMode') as boolean ?? false;
     const waveActive = this.registry.get('waveActive') as boolean ?? false;
     const nextWaveIn = this.registry.get('nextWaveIn') as number ?? 0;
@@ -634,6 +653,12 @@ export class UIScene extends Phaser.Scene {
   }
 
   private updateRecruitUI(): void {
+    // Vérifier que les boutons existent avant d'y accéder
+    if (!this.recruitKnight || !this.recruitWatcher || !this.recruitArbalest) {
+      console.warn('⚠️ updateRecruitUI: boutons de recrutement pas encore créés');
+      return;
+    }
+
     const shards = (this.registry.get('soulShards') as number) ?? 0;
     const barracks = (this.registry.get('barracksCount') as number) ?? 0;
     const enableKnight = barracks > 0 && shards >= this.knightCost;
@@ -703,6 +728,10 @@ export class UIScene extends Phaser.Scene {
     }
     this.gameOverShown = false;
 
+    // IMPORTANT: Supprimer la sauvegarde pour éviter de recharger l'ancien état
+    SaveSystem.deleteSave();
+    console.log('🗑️ Sauvegarde supprimée - Redémarrage à zéro');
+
     // Reset registry
     this.registry.set('soulShards', 100);
     this.registry.set('maxSoulShards', 100);
@@ -724,6 +753,7 @@ export class UIScene extends Phaser.Scene {
     // Redémarrer GameScene (scene.restart() gère automatiquement le nettoyage)
     const gameScene = this.scene.get('GameScene');
     if (gameScene) {
+
       // Arrêter UIScene d'abord
       this.scene.stop('UIScene');
       // Puis redémarrer GameScene (qui relancera UIScene dans son create())

@@ -273,16 +273,24 @@ export class GameScene extends Phaser.Scene {
             callbackScope: this
         });
 
-        // Nettoyage au shutdown (retire le timer s'il existe)
+        // Nettoyage au shutdown (retire les timers et événements)
         this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+            console.log('🔄 SHUTDOWN - Nettoyage en cours...');
+
+            // Nettoyer les événements et timers
             this.registry.events.off('changedata-buildKind');
             if (this.enemyTimer) { this.time.removeEvent(this.enemyTimer); }
             this.enemyTimer = undefined;
             if (this.autoSaveTimer) { this.time.removeEvent(this.autoSaveTimer); }
             this.autoSaveTimer = undefined;
-            // Sauvegarder une dernière fois avant de fermer avec les bâtiments
-            const buildingsData = this.collectBuildingsData();
-            SaveSystem.save(this.registry, buildingsData);
+            if (this.passiveSoulTimer) { this.time.removeEvent(this.passiveSoulTimer); }
+            this.passiveSoulTimer = undefined;
+            if (this.nextWaveTimer) { this.time.removeEvent(this.nextWaveTimer); }
+            this.nextWaveTimer = undefined;
+
+            // NE PLUS SAUVEGARDER ICI - la sauvegarde périodique suffit
+            // Cela évite les erreurs de groupes détruits lors du shutdown
+            console.log('✅ Nettoyage terminé (pas de sauvegarde au shutdown)');
         });
 
         // Inputs
@@ -323,10 +331,6 @@ export class GameScene extends Phaser.Scene {
             this.setBuildKind(value);
         });
 
-        // Nettoyage des écouteurs au shutdown
-        this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
-            this.registry.events.off('changedata-buildKind');
-        });
 
         // Init pathfinding grid
         this.pathfindingGrid = new PathfindingGrid(gameAreaW, gameAreaH);
@@ -3633,103 +3637,127 @@ export class GameScene extends Phaser.Scene {
 
     // === MÉTHODES DE SAUVEGARDE DES BÂTIMENTS ===
 
+
     /**
      * Collecte les données de tous les bâtiments pour la sauvegarde
      */
     public collectBuildingsData(): import('../utils/SaveSystem').SavedBuilding[] {
         const buildings: import('../utils/SaveSystem').SavedBuilding[] = [];
 
-        // Tours (IMPORTANT: utiliser worldX/worldY car le Rectangle est dans un Container)
-        for (const obj of this.towers.getChildren()) {
-            const tower = obj as Phaser.GameObjects.Rectangle;
-            const worldX = (tower.getData('worldX') as number) ?? tower.x;
-            const worldY = (tower.getData('worldY') as number) ?? tower.y;
+        // Vérification précoce : si les groupes ne sont pas initialisés, retourner un tableau vide
+        if (!this.towers || !this.walls || !this.generators) {
+            console.warn('⚠️ collectBuildingsData: groupes non initialisés, retour vide');
+            return buildings;
+        }
 
-            buildings.push({
-                type: 'tower',
-                x: worldX,
-                y: worldY,
-                hp: tower.getData('hp') as number,
-                maxHp: tower.getData('maxHp') as number,
-                upgradeLevel: (tower.getData('upgradeLevel') as number) ?? 0,
-                fireRateMul: (tower.getData('fireRateMul') as number) ?? 1,
-                damageMul: (tower.getData('damageMul') as number) ?? 1
-            });
+        // Vérifier que les groupes existent avant d'accéder à leurs enfants
+        // Cela évite les erreurs lors du shutdown de la scène
+
+        // Tours (IMPORTANT: utiliser worldX/worldY car le Rectangle est dans un Container)
+        if (this.towers && this.towers.getChildren) {
+            for (const obj of this.towers.getChildren()) {
+                const tower = obj as Phaser.GameObjects.Rectangle;
+                const worldX = (tower.getData('worldX') as number) ?? tower.x;
+                const worldY = (tower.getData('worldY') as number) ?? tower.y;
+
+                buildings.push({
+                    type: 'tower',
+                    x: worldX,
+                    y: worldY,
+                    hp: tower.getData('hp') as number,
+                    maxHp: tower.getData('maxHp') as number,
+                    upgradeLevel: (tower.getData('upgradeLevel') as number) ?? 0,
+                    fireRateMul: (tower.getData('fireRateMul') as number) ?? 1,
+                    damageMul: (tower.getData('damageMul') as number) ?? 1
+                });
+            }
         }
 
         // Murs
-        for (const obj of this.walls.getChildren()) {
-            const wall = obj as Phaser.GameObjects.Rectangle;
-            buildings.push({
-                type: 'wall',
-                x: wall.x,
-                y: wall.y,
-                hp: wall.getData('hp') as number,
-                maxHp: wall.getData('maxHp') as number
-            });
+        if (this.walls && this.walls.getChildren) {
+            for (const obj of this.walls.getChildren()) {
+                const wall = obj as Phaser.GameObjects.Rectangle;
+                buildings.push({
+                    type: 'wall',
+                    x: wall.x,
+                    y: wall.y,
+                    hp: wall.getData('hp') as number,
+                    maxHp: wall.getData('maxHp') as number
+                });
+            }
         }
 
         // Générateurs
-        for (const obj of this.generators.getChildren()) {
-            const gen = obj as Phaser.GameObjects.Rectangle;
-            buildings.push({
-                type: 'generator',
-                x: gen.x,
-                y: gen.y,
-                hp: gen.getData('hp') as number,
-                maxHp: gen.getData('maxHp') as number,
-                upgradeLevel: (gen.getData('upgradeLevel') as number) ?? 0,
-                yieldMul: (gen.getData('yieldMul') as number) ?? 1
-            });
+        if (this.generators && this.generators.getChildren) {
+            for (const obj of this.generators.getChildren()) {
+                const gen = obj as Phaser.GameObjects.Rectangle;
+                buildings.push({
+                    type: 'generator',
+                    x: gen.x,
+                    y: gen.y,
+                    hp: gen.getData('hp') as number,
+                    maxHp: gen.getData('maxHp') as number,
+                    upgradeLevel: (gen.getData('upgradeLevel') as number) ?? 0,
+                    yieldMul: (gen.getData('yieldMul') as number) ?? 1
+                });
+            }
         }
 
         // Feux de camp
-        for (const obj of this.campfires.getChildren()) {
-            const fire = obj as Phaser.GameObjects.Rectangle;
-            buildings.push({
-                type: 'campfire',
-                x: fire.x,
-                y: fire.y,
-                hp: fire.getData('hp') as number,
-                maxHp: fire.getData('maxHp') as number
-            });
+        if (this.campfires && this.campfires.getChildren) {
+            for (const obj of this.campfires.getChildren()) {
+                const fire = obj as Phaser.GameObjects.Rectangle;
+                buildings.push({
+                    type: 'campfire',
+                    x: fire.x,
+                    y: fire.y,
+                    hp: fire.getData('hp') as number,
+                    maxHp: fire.getData('maxHp') as number
+                });
+            }
         }
 
         // Forges
-        for (const obj of this.forges.getChildren()) {
-            const forge = obj as Phaser.GameObjects.Rectangle;
-            buildings.push({
-                type: 'forge',
-                x: forge.x,
-                y: forge.y,
-                hp: forge.getData('hp') as number,
-                maxHp: forge.getData('maxHp') as number
-            });
+        if (this.forges && this.forges.getChildren) {
+            for (const obj of this.forges.getChildren()) {
+                const forge = obj as Phaser.GameObjects.Rectangle;
+                buildings.push({
+                    type: 'forge',
+                    x: forge.x,
+                    y: forge.y,
+                    hp: forge.getData('hp') as number,
+                    maxHp: forge.getData('maxHp') as number
+                });
+            }
         }
 
         // Réserves
-        for (const obj of this.storages.getChildren()) {
-            const storage = obj as Phaser.GameObjects.Rectangle;
-            buildings.push({
-                type: 'storage',
-                x: storage.x,
-                y: storage.y,
-                hp: storage.getData('hp') as number,
-                maxHp: storage.getData('maxHp') as number,
-                capInc: storage.getData('capInc') as number
-            });
+        if (this.storages && this.storages.getChildren) {
+            for (const obj of this.storages.getChildren()) {
+                const storage = obj as Phaser.GameObjects.Rectangle;
+                buildings.push({
+                    type: 'storage',
+                    x: storage.x,
+                    y: storage.y,
+                    hp: storage.getData('hp') as number,
+                    maxHp: storage.getData('maxHp') as number,
+                    capInc: storage.getData('capInc') as number
+                });
+            }
         }
 
         // Casernes
-        for (const obj of this.barracks.getChildren()) {
-            const barrack = obj as Phaser.GameObjects.Rectangle;
-            buildings.push({
-                type: 'barracks',
-                x: barrack.x,
-                y: barrack.y,
-                hp: barrack.getData('hp') as number,
-                maxHp: barrack.getData('maxHp') as number
-            });
+        if (this.barracks && this.barracks.getChildren) {
+            for (const obj of this.barracks.getChildren()) {
+                const barrack = obj as Phaser.GameObjects.Rectangle;
+                buildings.push({
+                    type: 'barracks',
+                    x: barrack.x,
+                    y: barrack.y,
+                    hp: barrack.getData('hp') as number,
+                    maxHp: barrack.getData('maxHp') as number
+                });
+            }
         }
 
         const counts = buildings.reduce((acc, b) => {

@@ -35,7 +35,7 @@ export class GameConstants {
   static readonly GENERATOR_YIELD = 2; // Éclats produits par tick
 
   // ========== PRODUCTION PASSIVE ==========
-  static readonly PASSIVE_SOUL_RATE = 0.5; // Âmes par seconde (base)
+  static readonly PASSIVE_SOUL_RATE = 1.5; // Âmes par seconde (base)
 
   // ========== CAMPFIRES (AURAS) ==========
   static readonly CAMPFIRE_RADIUS = 120;
