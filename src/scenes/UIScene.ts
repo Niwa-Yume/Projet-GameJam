@@ -164,10 +164,14 @@ export class UIScene extends Phaser.Scene {
     this.addAshParticles();
 
     // Vérifier s'il y a des gains hors-ligne à afficher
-    const hasOfflineProgress = this.registry.get('hasOfflineProgress') as boolean ?? false;
-    if (hasOfflineProgress) {
-      // Affichage basique pour informer (fallback si overlay spécifique non implémenté)
-      this.showToast('Gains hors-ligne appliqués', 'success', 1500);
+    const offlineData = this.registry.get('offlineProgressData') as any;
+    if (offlineData && offlineData.soulsEarned > 0) {
+      // Afficher le popup de gains hors ligne
+      this.time.delayedCall(500, () => {
+        this.showOfflineProgressPopup(offlineData);
+      });
+      // Nettoyer pour ne pas réafficher
+      this.registry.set('offlineProgressData', null);
     }
 
     // === PANNEAU ÂMES (marge gauche) ===
@@ -718,19 +722,93 @@ export class UIScene extends Phaser.Scene {
     this.gameOverContainer.setDepth(1000);
   }
 
+  // Affiche un popup avec les gains hors ligne
+  private showOfflineProgressPopup(data: { formattedTime: string; soulsEarned: number }): void {
+    const cam = this.cameras.main;
+    const w = cam.width;
+    const h = cam.height;
+
+    // Fond sombre
+    const bg = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.7)
+      .setScrollFactor(0)
+      .setInteractive();
+
+    // Panneau principal
+    const panelW = 400;
+    const panelH = 250;
+    const panel = this.add.rectangle(w / 2, h / 2, panelW, panelH, this.theme.panelFill, 0.95)
+      .setScrollFactor(0)
+      .setStrokeStyle(3, this.theme.gold);
+
+    // Titre
+    const title = this.add.text(w / 2, h / 2 - 80, 'BIENVENUE !', {
+      ...this.txtStyle(32),
+      color: this.theme.text,
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setScrollFactor(0);
+
+    // Sous-titre
+    const subtitle = this.add.text(w / 2, h / 2 - 40, `Vous étiez absent pendant:`, {
+      ...this.txtStyle(18),
+      color: this.theme.textDim
+    }).setOrigin(0.5).setScrollFactor(0);
+
+    // Temps d'absence
+    const timeText = this.add.text(w / 2, h / 2 - 10, data.formattedTime, {
+      ...this.txtStyle(24),
+      color: '#66ccff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setScrollFactor(0);
+
+    // Icône âme
+    this.drawDiamond(w / 2 - 80, h / 2 + 30, 12, this.theme.soulColor).setScrollFactor(0);
+
+    // Âmes gagnées
+    const soulsText = this.add.text(w / 2 - 50, h / 2 + 30, `+${data.soulsEarned} âmes gagnées !`, {
+      ...this.txtStyle(22),
+      color: '#7bed9f',
+      fontStyle: 'bold'
+    }).setOrigin(0, 0.5).setScrollFactor(0);
+
+    // Bouton Continuer
+    const btnW = 180;
+    const btnH = 48;
+    const btnBg = this.add.rectangle(w / 2, h / 2 + 85, btnW, btnH, this.theme.buttonFill, 0.95)
+      .setStrokeStyle(2, this.theme.gold)
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0);
+
+    const btnTxt = this.add.text(w / 2, h / 2 + 85, 'Continuer', this.txtStyle(18))
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    // Clic pour fermer
+    const container = this.add.container(0, 0, [bg, panel, title, subtitle, timeText, soulsText, btnBg, btnTxt]);
+    container.setDepth(2000);
+
+    btnBg.on('pointerdown', () => {
+      btnBg.setFillStyle(this.theme.buttonFillActive, 0.95);
+      this.time.delayedCall(100, () => {
+        container.destroy(true);
+      });
+    });
+
+    btnBg.on('pointerover', () => {
+      btnBg.setFillStyle(this.theme.buttonFillHover, 0.95);
+    });
+
+    btnBg.on('pointerout', () => {
+      btnBg.setFillStyle(this.theme.buttonFill, 0.95);
+    });
+  }
+
   // Réinitialise la partie et redémarre la GameScene
   private resetGame(): void {
-    if (this.gameOverContainer) {
-      this.gameOverContainer.destroy(true);
-      this.gameOverContainer = undefined;
-    }
-    this.gameOverShown = false;
-
     // IMPORTANT: Supprimer la sauvegarde pour éviter de recharger l'ancien état
     SaveSystem.deleteSave();
     console.log('🗑️ Sauvegarde supprimée - Redémarrage à zéro');
 
-    // Reset registry
+    // Reset registry AVANT de détruire quoi que ce soit
     this.registry.set('soulShards', 100);
     this.registry.set('maxSoulShards', 100);
     this.registry.set('sanctuaryHP', 5);
@@ -748,14 +826,19 @@ export class UIScene extends Phaser.Scene {
     this.registry.set('waveTotal', 0);
     this.registry.set('waveRemaining', 0);
 
-    // Redémarrer GameScene (scene.restart() gère automatiquement le nettoyage)
+    // Nettoyer le flag AVANT de redémarrer
+    this.gameOverShown = false;
+
+    // Ne PAS détruire manuellement le container, laisser Phaser le faire
+    // lors du restart de la scène
+    this.gameOverContainer = undefined;
+
+    // Redémarrer GameScene (qui relancera UIScene dans son create())
     const gameScene = this.scene.get('GameScene');
     if (gameScene) {
-
-      // Arrêter UIScene d'abord
-      this.scene.stop('UIScene');
-      // Puis redémarrer GameScene (qui relancera UIScene dans son create())
+      // Redémarrer GameScene d'abord (qui stop UIScene automatiquement)
       gameScene.scene.restart();
+      // UIScene sera relancée automatiquement par GameScene.create()
     }
   }
 
@@ -1201,5 +1284,20 @@ export class UIScene extends Phaser.Scene {
     const perSec = prod;
     const gensPart = gens > 0 ? ` (${gens} générateur${gens > 1 ? 's' : ''})` : '';
     return `+${perSec.toFixed(2)} âmes/s${gensPart}`;
+  }
+
+  /**
+   * Nettoie proprement les containers avant le shutdown de la scène
+   * Évite l'erreur "Cannot read properties of undefined (reading 'sys')"
+   */
+  shutdown(): void {
+    // Lâcher les références aux containers sans les détruire
+    // Phaser s'en occupera automatiquement
+    this.gameOverContainer = undefined;
+    this.pauseContainer = undefined;
+    this.upgradeMenuContainer = undefined;
+
+    // Nettoyer les listeners d'événements pour éviter les fuites mémoire
+    this.registry.events.off('changedata');
   }
 }

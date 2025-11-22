@@ -152,6 +152,14 @@ export class GameScene extends Phaser.Scene {
             // Stocker pour afficher dans l'UI plus tard
             this.registry.set('offlineProgress', offlineProgress);
             this.registry.set('hasOfflineProgress', offlineProgress.timeElapsedSeconds > 60); // Au moins 1 minute
+
+            // Stocker dans le format attendu par UIScene
+            if (offlineProgress.timeElapsedSeconds > 60 && offlineProgress.soulsEarned > 0) {
+                this.registry.set('offlineProgressData', {
+                    formattedTime: SaveSystem.formatTimeElapsed(offlineProgress.timeElapsedSeconds),
+                    soulsEarned: offlineProgress.soulsEarned
+                });
+            }
         }
 
         // --- Registry init (AVANT l'UI) ---
@@ -881,13 +889,13 @@ export class GameScene extends Phaser.Scene {
         rift.closePath();
         rift.fillPath();
 
-        // === LUEUR DE LA FAILLE (ORANGE/ROUGE SOMBRE) ===
+        // === LUEUR DE LA FAILLE (BLEU MYSTIQUE - PORTAIL D'ÂMES) ===
         const riftGlow = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
         const drawRiftGlow = (intensity: number) => {
             riftGlow.clear();
 
-            // Lueur rouge/orange sortant du gouffre (comme de la lave)
-            riftGlow.fillStyle(0xaa4422, 0.3 + intensity * 0.25);
+            // Lueur bleu mystique sortant du gouffre (portail d'âmes)
+            riftGlow.fillStyle(0x4466ff, 0.3 + intensity * 0.25);
             riftGlow.beginPath();
             riftGlow.moveTo(0, -4);
             riftGlow.lineTo(-10, 2);
@@ -898,8 +906,8 @@ export class GameScene extends Phaser.Scene {
             riftGlow.closePath();
             riftGlow.fillPath();
 
-            // Halo extérieur orange
-            riftGlow.fillStyle(0xcc6633, 0.15 + intensity * 0.15);
+            // Halo extérieur bleu cyan (couleur des âmes)
+            riftGlow.fillStyle(0x66ccff, 0.15 + intensity * 0.15);
             riftGlow.fillEllipse(0, 5, 20, 18);
         };
 
@@ -938,16 +946,16 @@ export class GameScene extends Phaser.Scene {
                 const alpha = soul.life * 0.9;
                 const flicker = Math.sin(time * 5 + soul.phase) * 0.2 + 0.8;
 
-                // Forme fantomatique d'âme (blanc spectral)
-                souls.fillStyle(0xdddddd, alpha * flicker * 0.7);
+                // Forme fantomatique d'âme (bleu cyan spectral - COULEUR DES ÂMES)
+                souls.fillStyle(0x66ccff, alpha * flicker * 0.8);
                 souls.fillCircle(soul.x, soul.y, soul.size);
 
-                // Traînée spectrale (gris pâle)
-                souls.fillStyle(0xaaaaaa, alpha * flicker * 0.4);
+                // Traînée spectrale (bleu pâle)
+                souls.fillStyle(0x4488cc, alpha * flicker * 0.5);
                 souls.fillCircle(soul.x, soul.y + 2, soul.size * 0.7);
 
-                // Point central lumineux (blanc pur)
-                souls.fillStyle(0xffffff, alpha * flicker * 0.9);
+                // Point central lumineux (bleu clair éclatant)
+                souls.fillStyle(0xaaddff, alpha * flicker * 0.9);
                 souls.fillCircle(soul.x, soul.y, soul.size * 0.4);
             });
         };
@@ -1023,6 +1031,19 @@ export class GameScene extends Phaser.Scene {
         attachHealthBar(this, gen);
         gen.setInteractive({ useHandCursor: true });
 
+        // ⭐ LABEL "GEN" VISIBLE pour distinguer du tour
+        const genLabel = this.add.text(x, y - 35, 'GEN', {
+            fontSize: '14px',
+            color: '#66ccff',
+            fontFamily: 'Arial Black',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5).setDepth(11);
+
+        // Stocker le label pour le détruire avec le générateur
+        gen.setData('label', genLabel);
+
         // Mettre à jour l'affichage de production
         this.updateSoulProductionDisplay();
 
@@ -1059,6 +1080,13 @@ export class GameScene extends Phaser.Scene {
         gen.once(Phaser.GameObjects.Events.DESTROY, () => {
             genTimer.remove(false);
             riftTimer.remove(false);
+
+            // Détruire le label GEN
+            const label = gen.getData('label') as Phaser.GameObjects.Text | undefined;
+            if (label && label.scene) {
+                label.destroy();
+            }
+
             if (genContainer && genContainer.scene) {
                 genContainer.destroy();
             }
