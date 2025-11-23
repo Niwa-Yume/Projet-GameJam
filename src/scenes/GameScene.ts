@@ -64,6 +64,16 @@ export class GameScene extends Phaser.Scene {
     private autoWaveMode: boolean = false; // mode automatique (activé après vague 1)
     private nextWaveTimer?: Phaser.Time.TimerEvent; // timer pour lancer la vague suivante automatiquement
 
+    // Système d'auto-recrutement (IDLE GAME)
+    private autoRecruitEnabled: boolean = false;
+    private lastAutoRecruitTime: number = 0;
+    private autoRecruitInterval: number = 15000; // 15 secondes
+
+    // Système d'auto-upgrade des alliés (IDLE GAME)
+    private autoUpgradeEnabled: boolean = false;
+    private lastAutoUpgradeCheck: number = 0;
+    private autoUpgradeInterval: number = 5000; // Vérifie toutes les 5 secondes
+
     // Système de production passive d'âmes
     private passiveSoulTimer?: Phaser.Time.TimerEvent;
     private soulProductionRate: number = 0.5; // âmes par seconde
@@ -2562,6 +2572,44 @@ export class GameScene extends Phaser.Scene {
         // --- Alliés: IA simple ---
         this.updateAlliesAI();
 
+        // --- Mettre à jour les positions des étoiles et auras (Vétérans) ---
+        const allies = this.allies.getChildren() as any[];
+        for (const ally of allies) {
+            // Mettre à jour les étoiles
+            const stars = ally.getData('stars');
+            if (stars && stars.length > 0) {
+                stars.forEach((star: any, i: number) => {
+                    if (star && star.active) {
+                        star.setPosition(ally.x - 10 + (i * 8), ally.y - 30);
+                    }
+                });
+            }
+
+            // Mettre à jour l'aura
+            const aura = ally.getData('aura');
+            if (aura && aura.active) {
+                aura.setPosition(ally.x, ally.y);
+            }
+        }
+
+        // --- Auto-recrutement (IDLE GAME) ---
+        if (this.autoRecruitEnabled) {
+            const now = this.time.now;
+            if (now - this.lastAutoRecruitTime >= this.autoRecruitInterval) {
+                this.processAutoRecruit();
+                this.lastAutoRecruitTime = now;
+            }
+        }
+
+        // --- Auto-upgrade (IDLE GAME) ---
+        if (this.autoUpgradeEnabled) {
+            const now = this.time.now;
+            if (now - this.lastAutoUpgradeCheck >= this.autoUpgradeInterval) {
+                this.processAutoUpgrade();
+                this.lastAutoUpgradeCheck = now;
+            }
+        }
+
         // --- Ennemis: pathfollowing + attaques des bâtiments ---
         const dt = this.game.loop.delta / 1000; // secondes
         const eList = this.enemies.getChildren() as EnemyGO[];
@@ -2980,6 +3028,182 @@ export class GameScene extends Phaser.Scene {
     }
 
     // API publique pour l’UI: recruter une unité
+
+    // Toggle l'auto-recrutement (IDLE GAME)
+    public toggleAutoRecruit(): void {
+        this.autoRecruitEnabled = !this.autoRecruitEnabled;
+        console.log(`🤖 Auto-recrutement: ${this.autoRecruitEnabled ? 'ACTIVÉ' : 'DÉSACTIVÉ'}`);
+
+        if (this.autoRecruitEnabled) {
+            this.game.events.emit('notify', 'Auto-recrutement activé', 'success');
+        } else {
+            this.game.events.emit('notify', 'Auto-recrutement désactivé', 'info');
+        }
+    }
+
+    // Traite l'auto-recrutement (IDLE GAME)
+    private processAutoRecruit(): void {
+        const barracksCount = (this.registry.get('barracksCount') as number) ?? 0;
+        if (barracksCount <= 0) return;
+
+        const shards = (this.registry.get('soulShards') as number) ?? 0;
+
+        // PLUS DE LIMITE ! Recrutement illimité tant qu'il y a des âmes et des casernes
+
+        // Choisir un type aléatoire
+        const types: Array<'knight' | 'watcher' | 'arbalest'> = ['knight', 'watcher', 'arbalest'];
+        const randomType = Phaser.Utils.Array.GetRandom(types);
+        const def = GameConstants.UNIT_DEFS[randomType];
+
+        // Vérifier si on a assez d'âmes
+        if (shards >= def.cost) {
+            this.recruitUnit(randomType);
+            const currentAllies = this.allies.getLength();
+            console.log(`🤖 Auto-recrutement: ${randomType} recruté (Total: ${currentAllies})`);
+        } else {
+            console.log(`💰 Auto-recrutement: Pas assez d'âmes (${shards}/${def.cost})`);
+        }
+    }
+
+    // Toggle l'auto-upgrade des alliés (IDLE GAME)
+    public toggleAutoUpgrade(): void {
+        this.autoUpgradeEnabled = !this.autoUpgradeEnabled;
+        console.log(`🌟 Auto-upgrade: ${this.autoUpgradeEnabled ? 'ACTIVÉ' : 'DÉSACTIVÉ'}`);
+
+        if (this.autoUpgradeEnabled) {
+            this.game.events.emit('notify', 'Auto-upgrade activé', 'success');
+        } else {
+            this.game.events.emit('notify', 'Auto-upgrade désactivé', 'info');
+        }
+    }
+
+    // Traite l'auto-upgrade des alliés (IDLE GAME)
+    private processAutoUpgrade(): void {
+        const shards = (this.registry.get('soulShards') as number) ?? 0;
+        const allies = this.allies.getChildren() as any[];
+
+        for (const ally of allies) {
+            const kills = ally.getData('kills') || 0;
+            const level = ally.getData('level') || 1;
+
+            // Définir les seuils de montée de niveau
+            const levelUpThresholds = {
+                2: { kills: 10, cost: 10 },
+                3: { kills: 30, cost: 25 },
+                4: { kills: 60, cost: 50 },
+                5: { kills: 100, cost: 100 }
+            };
+
+            // Vérifier si l'allié peut monter de niveau
+            if (level < 5) {
+                const nextLevel = (level + 1) as 2 | 3 | 4 | 5;
+                const threshold = levelUpThresholds[nextLevel];
+
+                if (kills >= threshold.kills && shards >= threshold.cost) {
+                    // Level up !
+                    ally.setData('level', nextLevel);
+                    this.registry.set('soulShards', shards - threshold.cost);
+
+                    // Appliquer les bonus de stats
+                    const kind = ally.getData('kind');
+                    this.applyVeteranBonus(ally, kind, nextLevel);
+
+                    // Effet visuel
+                    this.showLevelUpEffect(ally, nextLevel);
+
+                    console.log(`🌟 Auto-upgrade: Allié level ${level} → ${nextLevel} (${threshold.cost} âmes)`);
+
+                    // Une seule upgrade par cycle
+                    return;
+                }
+            }
+        }
+    }
+
+    // Applique les bonus de vétéran
+    private applyVeteranBonus(ally: any, kind: string, level: number): void {
+        const def = GameConstants.UNIT_DEFS[kind as 'knight' | 'watcher' | 'arbalest'];
+        if (!def) return;
+
+        // Multiplicateurs de stats par niveau
+        const hpMultipliers = { 1: 1.0, 2: 1.2, 3: 1.4, 4: 1.7, 5: 2.0 };
+        const dmgMultipliers = { 1: 1.0, 2: 1.1, 3: 1.25, 4: 1.5, 5: 2.0 };
+
+        // Calculer les nouvelles stats
+        const newMaxHP = def.hp * hpMultipliers[level as keyof typeof hpMultipliers];
+        const newDamage = def.damage * dmgMultipliers[level as keyof typeof dmgMultipliers];
+
+        // Appliquer (stockées dans getData)
+        ally.setData('maxHp', newMaxHP);
+        ally.setData('damage', newDamage);
+        ally.setData('hp', newMaxHP); // Soigne complètement au level up
+    }
+
+    // Affiche un effet visuel de level up
+    private showLevelUpEffect(ally: any, level: number): void {
+        // Particules dorées
+        const particles = this.add.particles(ally.x, ally.y - 20, 'ash', {
+            lifespan: 1000,
+            speed: { min: 20, max: 50 },
+            scale: { start: 1, end: 0 },
+            tint: 0xffd700,
+            quantity: 10,
+            blendMode: 'ADD'
+        });
+
+        // Détruire après 1 seconde
+        this.time.delayedCall(1000, () => {
+            particles.destroy();
+        });
+
+        // Afficher les étoiles de niveau au-dessus de l'allié
+        this.updateAllyStars(ally, level);
+    }
+
+    // Met à jour l'affichage des étoiles au-dessus d'un allié
+    private updateAllyStars(ally: any, level: number): void {
+        // Supprimer les anciennes étoiles
+        const oldStars = ally.getData('stars');
+        if (oldStars) {
+            oldStars.forEach((star: any) => star.destroy());
+        }
+
+        // Créer les nouvelles étoiles
+        const stars: Phaser.GameObjects.Text[] = [];
+        const starText = '⭐';
+
+        for (let i = 0; i < level - 1; i++) {
+            const star = this.add.text(ally.x - 10 + (i * 8), ally.y - 30, starText, {
+                fontSize: '12px',
+                color: '#ffd700'
+            }).setOrigin(0.5).setDepth(20);
+            stars.push(star);
+        }
+
+        ally.setData('stars', stars);
+
+        // Si niveau 5, ajouter une aura dorée
+        if (level === 5) {
+            const aura = this.add.circle(ally.x, ally.y, 20, 0xffd700, 0.2)
+                .setStrokeStyle(2, 0xffd700, 0.5)
+                .setDepth(9);
+
+            ally.setData('aura', aura);
+
+            // Animation pulsante
+            this.tweens.add({
+                targets: aura,
+                scaleX: 1.2,
+                scaleY: 1.2,
+                alpha: 0.4,
+                duration: 1000,
+                yoyo: true,
+                repeat: -1
+            });
+        }
+    }
+
+    // API publique pour l'UI: recruter une unité
     public recruitUnit(kind: 'knight' | 'watcher' | 'arbalest'): void {
         const def = GameConstants.UNIT_DEFS[kind];
         if (!def) return;
@@ -3042,6 +3266,14 @@ export class GameScene extends Phaser.Scene {
         allySprite.setData('kind', kind);
         allySprite.setData('nextAtk', 0);
 
+        // Système de Vétérans (IDLE GAME)
+        allySprite.setData('kills', 0);
+        allySprite.setData('level', 1);
+        const def = GameConstants.UNIT_DEFS[kind];
+        allySprite.setData('maxHp', def.hp);
+        allySprite.setData('hp', def.hp);
+        allySprite.setData('damage', def.damage);
+
         // Notification visuelle
         console.log(`⚔️ ${kind === 'knight' ? 'Chevalier' : kind === 'watcher' ? 'Veilleur' : 'Arbalétrier'} recruté à (${sx.toFixed(0)}, ${sy.toFixed(0)}) !`);
     }
@@ -3089,6 +3321,10 @@ export class GameScene extends Phaser.Scene {
 
                             this.decWaveRemaining(1);
                             ally.setData('nextAtk', now + def.atkRateMs);
+
+                            // Système de Vétérans : Incrémenter les kills
+                            const kills = (ally.getData('kills') || 0) + 1;
+                            ally.setData('kills', kills);
 
                             // Effet visuel d'attaque mêlée
                             allyAttackEffect(this, ally);
@@ -3243,16 +3479,32 @@ export class GameScene extends Phaser.Scene {
         const snappedX = GameConstants.UI_MARGIN_LEFT + cellX * TS + TS / 2;
         const snappedY = GameConstants.UI_MARGIN_TOP + cellY * TS + TS / 2;
         if (Math.abs(snappedX - this.sanctuaryPos.x) < 1 && Math.abs(snappedY - this.sanctuaryPos.y) < 1) return false;
-        const occupied = (
-            this.towers.getChildren() as Phaser.GameObjects.Rectangle[]
-        ).concat(
-            this.walls.getChildren() as Phaser.GameObjects.Rectangle[],
-            this.generators.getChildren() as Phaser.GameObjects.Rectangle[],
-            this.campfires.getChildren() as Phaser.GameObjects.Rectangle[],
-            this.forges.getChildren() as Phaser.GameObjects.Rectangle[],
-            this.storages.getChildren() as Phaser.GameObjects.Rectangle[],
-            this.barracks.getChildren() as Phaser.GameObjects.Rectangle[]
-        ).some(go => Math.abs(go.x - snappedX) < 1 && Math.abs(go.y - snappedY) < 1);
+
+        // Fonction helper pour obtenir la vraie position d'un bâtiment
+        const getRealPosition = (building: any) => {
+            const container = building.getData('container') as Phaser.GameObjects.Container | undefined;
+            return {
+                x: container ? container.x : building.x,
+                y: container ? container.y : building.y
+            };
+        };
+
+        // Vérifier tous les bâtiments
+        const allBuildings = [
+            ...this.towers.getChildren() as Phaser.GameObjects.Rectangle[],
+            ...this.walls.getChildren() as Phaser.GameObjects.Rectangle[],
+            ...this.generators.getChildren() as Phaser.GameObjects.Rectangle[],
+            ...this.campfires.getChildren() as Phaser.GameObjects.Rectangle[],
+            ...this.forges.getChildren() as Phaser.GameObjects.Rectangle[],
+            ...this.storages.getChildren() as Phaser.GameObjects.Rectangle[],
+            ...this.barracks.getChildren() as Phaser.GameObjects.Rectangle[]
+        ];
+
+        const occupied = allBuildings.some(building => {
+            const pos = getRealPosition(building);
+            return Math.abs(pos.x - snappedX) < 1 && Math.abs(pos.y - snappedY) < 1;
+        });
+
         if (occupied) return false;
         const shards = (this.registry.get('soulShards') as number) ?? 0;
         return shards >= this.getCurrentCost();
@@ -3262,15 +3514,31 @@ export class GameScene extends Phaser.Scene {
         const TS = GameConstants.TILE_SIZE;
         const snappedX = GameConstants.UI_MARGIN_LEFT + cellX * TS + TS / 2;
         const snappedY = GameConstants.UI_MARGIN_TOP + cellY * TS + TS / 2;
-        return (
-            (this.towers.getChildren() as Phaser.GameObjects.Rectangle[]).some(go => Math.abs(go.x - snappedX) < 1 && Math.abs(go.y - snappedY) < 1) ||
-            (this.walls.getChildren() as Phaser.GameObjects.Rectangle[]).some(go => Math.abs(go.x - snappedX) < 1 && Math.abs(go.y - snappedY) < 1) ||
-            (this.generators.getChildren() as Phaser.GameObjects.Rectangle[]).some(go => Math.abs(go.x - snappedX) < 1 && Math.abs(go.y - snappedY) < 1) ||
-            (this.campfires.getChildren() as Phaser.GameObjects.Rectangle[]).some(go => Math.abs(go.x - snappedX) < 1 && Math.abs(go.y - snappedY) < 1) ||
-            (this.forges.getChildren() as Phaser.GameObjects.Rectangle[]).some(go => Math.abs(go.x - snappedX) < 1 && Math.abs(go.y - snappedY) < 1) ||
-            (this.storages.getChildren() as Phaser.GameObjects.Rectangle[]).some(go => Math.abs(go.x - snappedX) < 1 && Math.abs(go.y - snappedY) < 1) ||
-            (this.barracks.getChildren() as Phaser.GameObjects.Rectangle[]).some(go => Math.abs(go.x - snappedX) < 1 && Math.abs(go.y - snappedY) < 1)
-        );
+
+        // Fonction helper pour obtenir la vraie position
+        const getRealPosition = (building: any) => {
+            const container = building.getData('container') as Phaser.GameObjects.Container | undefined;
+            return {
+                x: container ? container.x : building.x,
+                y: container ? container.y : building.y
+            };
+        };
+
+        // Vérifier tous les types de bâtiments
+        const checkGroup = (group: Phaser.GameObjects.Group) => {
+            return (group.getChildren() as any[]).some(building => {
+                const pos = getRealPosition(building);
+                return Math.abs(pos.x - snappedX) < 1 && Math.abs(pos.y - snappedY) < 1;
+            });
+        };
+
+        return checkGroup(this.towers) ||
+               checkGroup(this.walls) ||
+               checkGroup(this.generators) ||
+               checkGroup(this.campfires) ||
+               checkGroup(this.forges) ||
+               checkGroup(this.storages) ||
+               checkGroup(this.barracks);
     }
 
     private isSanctuaryCell(cellX: number, cellY: number): boolean {

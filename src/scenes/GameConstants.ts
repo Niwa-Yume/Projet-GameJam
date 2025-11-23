@@ -59,7 +59,9 @@ export class GameConstants {
       speed: 110,
       atkRange: 20,
       atkRateMs: 700,
-      role: 'melee' as const
+      role: 'melee' as const,
+      hp: 150,
+      damage: 20
     },
     watcher: {
       cost: 35,
@@ -67,7 +69,9 @@ export class GameConstants {
       speed: 125,
       atkRange: 26,
       atkRateMs: 550,
-      role: 'melee' as const
+      role: 'melee' as const,
+      hp: 80,
+      damage: 12
     },
     arbalest: {
       cost: 30,
@@ -75,7 +79,9 @@ export class GameConstants {
       speed: 120,
       atkRange: 180,
       atkRateMs: 800,
-      role: 'ranged' as const
+      role: 'ranged' as const,
+      hp: 60,
+      damage: 25
     }
   };
 

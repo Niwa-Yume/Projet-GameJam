@@ -67,6 +67,11 @@ export class UIScene extends Phaser.Scene {
   private watcherCost = 35;
   private arbalestCost = 30;
 
+  // Panneau État des Recrues (Idle Game)
+  private alliesStatsText?: Phaser.GameObjects.Text;
+  private autoRecruitStatusText?: Phaser.GameObjects.Text;
+  private autoUpgradeStatusText?: Phaser.GameObjects.Text;
+
   // Tooltip et toast
   private tooltipBg?: Phaser.GameObjects.Rectangle;
   private tooltipTxt?: Phaser.GameObjects.Text;
@@ -369,6 +374,91 @@ export class UIScene extends Phaser.Scene {
     this.recruitKnight   = this.createRecruitButton(recruitBtnRight, recTop + 30,  `Chevalier (${this.knightCost})`,     () => this.tryRecruit('knight', this.knightCost),   () => 'Chevalier — mêlée, robuste');
     this.recruitWatcher  = this.createRecruitButton(recruitBtnRight, recTop + 52,  `Veilleur (${this.watcherCost})`,    () => this.tryRecruit('watcher', this.watcherCost), () => 'Veilleur — mêlée, rapide');
     this.recruitArbalest = this.createRecruitButton(recruitBtnRight, recTop + 74,  `Arbalétrier (${this.arbalestCost})`, () => this.tryRecruit('arbalest', this.arbalestCost), () => 'Arbalétrier — distance');
+
+    // === PANNEAU ÉTAT DES RECRUES (IDLE GAME) ===
+    const allyStatsTop = recTop + 120;
+    const allyStatsPanelW = 130;
+    const allyStatsPanelH = 165; // Augmenté pour le 2e bouton
+
+    this.add.rectangle(rightPanelX, allyStatsTop, allyStatsPanelW, allyStatsPanelH, this.theme.panelFill, 0.9)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2, 0x7bed9f, 0.8) // Vert pour idle game
+      .setScrollFactor(0)
+      .setDepth(0);
+
+    this.add.text(rightPanelX + 10, allyStatsTop + 5, 'ÉTAT RECRUES', {
+      ...this.txtStyle(13),
+      color: '#7bed9f',
+      fontStyle: 'bold'
+    }).setOrigin(0, 0).setScrollFactor(0).setDepth(1);
+
+    // Texte des statistiques (mis à jour chaque frame)
+    this.alliesStatsText = this.add.text(rightPanelX + 10, allyStatsTop + 25, this.getAlliesStatsText(), {
+      ...this.txtStyle(11),
+      color: '#ffffff'
+    }).setOrigin(0, 0).setScrollFactor(0).setDepth(1);
+
+    // Bouton Toggle Auto-Recrutement
+    const toggleBtnY = allyStatsTop + 105;
+    const toggleBtnW = 110;
+    const toggleBtnH = 24;
+    const toggleBtnX = rightPanelX + 10;
+
+    const toggleBg = this.add.rectangle(toggleBtnX, toggleBtnY, toggleBtnW, toggleBtnH, this.theme.buttonFill, 0.9)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, this.theme.gold, 0.8)
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0)
+      .setDepth(1);
+
+    this.autoRecruitStatusText = this.add.text(toggleBtnX + toggleBtnW / 2, toggleBtnY + toggleBtnH / 2, 'Auto: OFF', {
+      ...this.txtStyle(11),
+      color: '#ff6b6b'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2);
+
+    toggleBg.on('pointerdown', () => {
+      const game = this.scene.get('GameScene') as any;
+      if (game && typeof game.toggleAutoRecruit === 'function') {
+        game.toggleAutoRecruit();
+      }
+    });
+
+    toggleBg.on('pointerover', () => {
+      toggleBg.setFillStyle(this.theme.buttonFillHover, 0.95);
+    });
+
+    toggleBg.on('pointerout', () => {
+      toggleBg.setFillStyle(this.theme.buttonFill, 0.9);
+    });
+
+    // Bouton Toggle Auto-Upgrade (juste en dessous)
+    const toggleUpgradeBtnY = allyStatsTop + 132;
+    const toggleUpgradeBg = this.add.rectangle(toggleBtnX, toggleUpgradeBtnY, toggleBtnW, toggleBtnH, this.theme.buttonFill, 0.9)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, 0x9f8d62, 0.8)
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0)
+      .setDepth(1);
+
+    this.autoUpgradeStatusText = this.add.text(toggleBtnX + toggleBtnW / 2, toggleUpgradeBtnY + toggleBtnH / 2, 'Upgrade: OFF', {
+      ...this.txtStyle(10),
+      color: '#ff6b6b'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2);
+
+    toggleUpgradeBg.on('pointerdown', () => {
+      const game = this.scene.get('GameScene') as any;
+      if (game && typeof game.toggleAutoUpgrade === 'function') {
+        game.toggleAutoUpgrade();
+      }
+    });
+
+    toggleUpgradeBg.on('pointerover', () => {
+      toggleUpgradeBg.setFillStyle(this.theme.buttonFillHover, 0.95);
+    });
+
+    toggleUpgradeBg.on('pointerout', () => {
+      toggleUpgradeBg.setFillStyle(this.theme.buttonFill, 0.9);
+    });
 
     // État initial bouton vague
     const initialWaveActive = !!(this.registry.get('waveActive') as boolean);
@@ -1317,6 +1407,78 @@ export class UIScene extends Phaser.Scene {
     const perSec = prod;
     const gensPart = gens > 0 ? ` (${gens} générateur${gens > 1 ? 's' : ''})` : '';
     return `+${perSec.toFixed(2)} âmes/s${gensPart}`;
+  }
+
+  /**
+   * Met à jour l'affichage en temps réel (idle game)
+   */
+  update(): void {
+    // Mettre à jour les stats des alliés toutes les frames
+    if (this.alliesStatsText) {
+      this.alliesStatsText.setText(this.getAlliesStatsText());
+    }
+
+    // Mettre à jour le statut de l'auto-recrutement
+    if (this.autoRecruitStatusText) {
+      const game = this.scene.get('GameScene') as any;
+      if (game && game.allies) {
+        const autoEnabled = game.autoRecruitEnabled || false;
+        this.autoRecruitStatusText.setText(autoEnabled ? 'Auto: ON' : 'Auto: OFF');
+        this.autoRecruitStatusText.setColor(autoEnabled ? '#7bed9f' : '#ff6b6b');
+      }
+    }
+
+    // Mettre à jour le statut de l'auto-upgrade
+    if (this.autoUpgradeStatusText) {
+      const game = this.scene.get('GameScene') as any;
+      if (game) {
+        const autoUpgradeEnabled = game.autoUpgradeEnabled || false;
+        this.autoUpgradeStatusText.setText(autoUpgradeEnabled ? 'Upgrade: ON' : 'Upgrade: OFF');
+        this.autoUpgradeStatusText.setColor(autoUpgradeEnabled ? '#ffd700' : '#ff6b6b');
+      }
+    }
+  }
+
+  /**
+   * Récupère le texte des statistiques des alliés
+   */
+  private getAlliesStatsText(): string {
+    const game = this.scene.get('GameScene') as any;
+
+    if (!game || !game.allies) {
+      return 'Aucune donnée';
+    }
+
+    // Compter les alliés
+    const alliesArray = game.allies.getChildren() as any[];
+    const totalAllies = alliesArray.length;
+
+    // Compter par type
+    const knights = alliesArray.filter((a: any) => a.getData('kind') === 'knight').length;
+    const watchers = alliesArray.filter((a: any) => a.getData('kind') === 'watcher').length;
+    const arbalests = alliesArray.filter((a: any) => a.getData('kind') === 'arbalest').length;
+
+    // Stats avancées (kills, niveaux)
+    let totalKills = 0;
+    let maxLevel = 0;
+    let veteransCount = 0; // Niveau 3+
+
+    alliesArray.forEach((a: any) => {
+      const kills = a.getData('kills') || 0;
+      const level = a.getData('level') || 1;
+      totalKills += kills;
+      if (level > maxLevel) maxLevel = level;
+      if (level >= 3) veteransCount++;
+    });
+
+    // Casernes
+    const barracksCount = (this.registry.get('barracksCount') as number) ?? 0;
+
+    return `Total: ${totalAllies} ${veteransCount > 0 ? `(⭐${veteransCount})` : ''}\n` +
+           `🛡️ ${knights} 🗡️ ${watchers} 🏹 ${arbalests}\n` +
+           `💀 Kills: ${totalKills}\n` +
+           `⭐ Max lvl: ${maxLevel}\n` +
+           `🏰 Casernes: ${barracksCount}`;
   }
 
   /**
