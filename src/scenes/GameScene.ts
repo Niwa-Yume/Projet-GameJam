@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { createBonfire } from '../entities/Bonfire';
 import { createSkeletonEnemy, createBossSkeletonEnemy } from '../entities/Enemies';
+import { createAllySprite, allyAttackEffect } from '../entities/Allies';
 import { attachHealthBar, updateHealthBar } from '../ui/HealthBar';
 import { SaveSystem } from '../utils/SaveSystem';
 import { GameConstants } from './GameConstants';
@@ -2767,8 +2768,9 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
-    private fireAllyProjectile(ally: Phaser.GameObjects.Rectangle, target: EnemyGO): void {
-        const bullet = this.add.rectangle(ally.x, ally.y, 6, 6, 0xbfa76a).setDepth(12);
+    private fireAllyProjectile(ally: Phaser.GameObjects.GameObject, target: EnemyGO): void {
+        const allyObj = ally as any; // Cast pour accéder à x, y
+        const bullet = this.add.rectangle(allyObj.x, allyObj.y, 6, 6, 0xbfa76a).setDepth(12);
 
         // Ajouter au groupe physique AVANT d'ajouter la physique
         this.bullets.add(bullet);
@@ -2776,8 +2778,8 @@ export class GameScene extends Phaser.Scene {
         this.physics.add.existing(bullet);
         const body = bullet.body as Phaser.Physics.Arcade.Body;
         body.setAllowGravity(false);
-        const dx = target.x - ally.x;
-        const dy = target.y - ally.y;
+        const dx = target.x - allyObj.x;
+        const dy = target.y - allyObj.y;
         const len = Math.hypot(dx, dy) || 1;
         const vx = (dx / len) * (GameConstants.BULLET_SPEED * 0.9);
         const vy = (dy / len) * (GameConstants.BULLET_SPEED * 0.9);
@@ -3015,44 +3017,66 @@ export class GameScene extends Phaser.Scene {
         const b = this.barracks.getChildren() as Phaser.GameObjects.Rectangle[];
         if (b.length > 0) {
             const pick = Phaser.Utils.Array.GetRandom(b);
-            sx = pick.x + Phaser.Math.Between(-8, 8);
-            sy = pick.y + Phaser.Math.Between(-8, 8);
+
+            // La caserne est dans un container, récupérer sa vraie position
+            const container = pick.getData('container') as Phaser.GameObjects.Container | undefined;
+            const barracksX = container ? container.x : pick.x;
+            const barracksY = container ? container.y : pick.y;
+
+            sx = barracksX + Phaser.Math.Between(-8, 8);
+            sy = barracksY + Phaser.Math.Between(-8, 8);
         }
-        const color = kind === 'knight' ? 0x6b7a8a : kind === 'watcher' ? 0x6a8a79 : 0xb79a52;
-        const ally = this.add.rectangle(sx, sy, 24, 24, color).setDepth(11).setStrokeStyle(1, 0x3e372d, 0.5);
-        this.allies.add(ally);
-        this.physics.add.existing(ally);
-        const body = ally.body as Phaser.Physics.Arcade.Body;
-        body.setAllowGravity(false);
-        ally.setData('kind', kind);
-        ally.setData('nextAtk', 0);
+
+        // UTILISER LES VRAIS SPRITES AU LIEU DES CUBES
+        const allySprite = createAllySprite(this, kind, sx, sy);
+
+        this.allies.add(allySprite);
+
+        // La physique est déjà ajoutée dans createAllySprite,
+        // mais on récupère le body pour être sûr
+        const body = allySprite.body as Phaser.Physics.Arcade.Body;
+        if (body) {
+            body.setAllowGravity(false);
+        }
+
+        allySprite.setData('kind', kind);
+        allySprite.setData('nextAtk', 0);
+
+        // Notification visuelle
+        console.log(`⚔️ ${kind === 'knight' ? 'Chevalier' : kind === 'watcher' ? 'Veilleur' : 'Arbalétrier'} recruté à (${sx.toFixed(0)}, ${sy.toFixed(0)}) !`);
     }
 
     private updateAlliesAI(): void {
         const now = this.time.now;
-        const allies = this.allies.getChildren() as Phaser.GameObjects.Rectangle[];
+        // Les alliés sont maintenant des Images, pas des Rectangles
+        const allies = this.allies.getChildren() as Phaser.GameObjects.GameObject[];
         for (const a of allies) {
-            const kind = a.getData('kind') as 'knight' | 'watcher' | 'arbalest';
+            // Cast en tant que GameObject pour accéder à x, y, body
+            const ally = a as any; // GameObject avec physics
+            const kind = ally.getData('kind') as 'knight' | 'watcher' | 'arbalest';
             const def = GameConstants.UNIT_DEFS[kind];
             const vision = kind === 'arbalest' ? def.atkRange : 220;
-            const target = this.findTarget(a.x, a.y, vision);
-            const body = a.body as Phaser.Physics.Arcade.Body | undefined;
+            const target = this.findTarget(ally.x, ally.y, vision);
+            const body = ally.body as Phaser.Physics.Arcade.Body | undefined;
 
             if (target) {
-                const d = Phaser.Math.Distance.Between(a.x, a.y, target.x, target.y);
+                const d = Phaser.Math.Distance.Between(ally.x, ally.y, target.x, target.y);
                 if (def.role === 'ranged') {
                     if (d <= def.atkRange) {
-                        if (now >= ((a.getData('nextAtk') as number) ?? 0)) {
-                            this.fireAllyProjectile(a, target);
-                            a.setData('nextAtk', now + def.atkRateMs);
+                        if (now >= ((ally.getData('nextAtk') as number) ?? 0)) {
+                            this.fireAllyProjectile(ally, target);
+                            ally.setData('nextAtk', now + def.atkRateMs);
+
+                            // Effet visuel d'attaque
+                            allyAttackEffect(this, ally);
                         }
                         if (body) body.setVelocity(0, 0);
                     } else {
-                        if (body) this.seek(body, a.x, a.y, target.x, target.y, def.speed);
+                        if (body) this.seek(body, ally.x, ally.y, target.x, target.y, def.speed);
                     }
                 } else {
                     if (d <= def.atkRange + 6) {
-                        if (now >= ((a.getData('nextAtk') as number) ?? 0)) {
+                        if (now >= ((ally.getData('nextAtk') as number) ?? 0)) {
                             // Tuer l'ennemi au corps-à-corps (allié)
                             // Retirer proprement du groupe puis détruire
                             if (this.enemies.contains(target as any)) this.enemies.remove(target as any, true, false);
@@ -3064,17 +3088,20 @@ export class GameScene extends Phaser.Scene {
                             this.addShards(reward);
 
                             this.decWaveRemaining(1);
-                            a.setData('nextAtk', now + def.atkRateMs);
+                            ally.setData('nextAtk', now + def.atkRateMs);
+
+                            // Effet visuel d'attaque mêlée
+                            allyAttackEffect(this, ally);
                         }
                         if (body) body.setVelocity(0, 0);
                     } else {
-                        if (body) this.seek(body, a.x, a.y, target.x, target.y, def.speed);
+                        if (body) this.seek(body, ally.x, ally.y, target.x, target.y, def.speed);
                     }
                 }
             } else {
-                const d = Phaser.Math.Distance.Between(a.x, a.y, this.sanctuaryPos.x, this.sanctuaryPos.y);
+                const d = Phaser.Math.Distance.Between(ally.x, ally.y, this.sanctuaryPos.x, this.sanctuaryPos.y);
                 if (d > 120) {
-                    if (body) this.seek(body, a.x, a.y, this.sanctuaryPos.x, this.sanctuaryPos.y, def.speed * 0.9);
+                    if (body) this.seek(body, ally.x, ally.y, this.sanctuaryPos.x, this.sanctuaryPos.y, def.speed * 0.9);
                 } else {
                     if (body) body.setVelocity(0, 0);
                 }
@@ -3774,25 +3801,66 @@ export class GameScene extends Phaser.Scene {
         const currentShards = (this.registry.get('soulShards') as number) ?? 0;
         this.registry.set('soulShards', currentShards + refund);
 
-        // Supprimer le container s'il existe
+        // === DÉTRUIRE TOUS LES ÉLÉMENTS GRAPHIQUES ===
+
+        // 1. Détruire le container s'il existe
         const container = building.getData('container') as Phaser.GameObjects.Container | undefined;
-        if (container) {
+        if (container && container.scene) {
             container.destroy(true);
         }
 
-        // Supprimer le bâtiment du groupe
-        if (group) {
-            group.remove(building, true, true);
+        // 2. Détruire le label s'il existe (générateurs)
+        const label = building.getData('label') as Phaser.GameObjects.Text | undefined;
+        if (label && label.scene) {
+            label.destroy();
         }
 
-        // Supprimer la barre de santé associée
+        // 3. Nettoyer les timers
+        const riftTimer = building.getData('riftTimer') as Phaser.Time.TimerEvent | undefined;
+        if (riftTimer) {
+            riftTimer.remove(false);
+        }
+
+        const genTimer = building.getData('genTimer') as Phaser.Time.TimerEvent | undefined;
+        if (genTimer) {
+            genTimer.remove(false);
+        }
+
+        const fireTimer = building.getData('fireTimer') as Phaser.Time.TimerEvent | undefined;
+        if (fireTimer) {
+            fireTimer.remove(false);
+        }
+
+        const forgeTimer = building.getData('forgeTimer') as Phaser.Time.TimerEvent | undefined;
+        if (forgeTimer) {
+            forgeTimer.remove(false);
+        }
+
+        const mimicTimer = building.getData('mimicTimer') as Phaser.Time.TimerEvent | undefined;
+        if (mimicTimer) {
+            mimicTimer.remove(false);
+        }
+
+        const bannerTimer = building.getData('bannerTimer') as Phaser.Time.TimerEvent | undefined;
+        if (bannerTimer) {
+            bannerTimer.remove(false);
+        }
+
+        // 4. Détruire la barre de santé associée
         const healthBarBg = building.getData('healthBarBg') as Phaser.GameObjects.Graphics | undefined;
         const healthBarFill = building.getData('healthBarFill') as Phaser.GameObjects.Graphics | undefined;
-        if (healthBarBg) healthBarBg.destroy();
-        if (healthBarFill) healthBarFill.destroy();
+        if (healthBarBg && healthBarBg.scene) healthBarBg.destroy();
+        if (healthBarFill && healthBarFill.scene) healthBarFill.destroy();
 
-        // Détruire le bâtiment lui-même
-        building.destroy();
+        // 5. Supprimer le bâtiment du groupe
+        if (group) {
+            group.remove(building, true, false); // Ne pas détruire encore
+        }
+
+        // 6. Détruire le bâtiment lui-même
+        if (building.scene) {
+            building.destroy();
+        }
 
         // Recalculer la grille et les chemins ennemis
         this.recomputeGrid();
@@ -3861,10 +3929,15 @@ export class GameScene extends Phaser.Scene {
         if (this.generators && this.generators.getChildren) {
             for (const obj of this.generators.getChildren()) {
                 const gen = obj as Phaser.GameObjects.Rectangle;
+                // Le générateur est dans un container, récupérer la position du container
+                const container = gen.getData('container') as Phaser.GameObjects.Container | undefined;
+                const realX = container ? container.x : gen.x;
+                const realY = container ? container.y : gen.y;
+
                 buildings.push({
                     type: 'generator',
-                    x: gen.x,
-                    y: gen.y,
+                    x: realX,
+                    y: realY,
                     hp: gen.getData('hp') as number,
                     maxHp: gen.getData('maxHp') as number,
                     upgradeLevel: (gen.getData('upgradeLevel') as number) ?? 0,
@@ -3877,10 +3950,15 @@ export class GameScene extends Phaser.Scene {
         if (this.campfires && this.campfires.getChildren) {
             for (const obj of this.campfires.getChildren()) {
                 const fire = obj as Phaser.GameObjects.Rectangle;
+                // Le feu est dans un container
+                const container = fire.getData('container') as Phaser.GameObjects.Container | undefined;
+                const realX = container ? container.x : fire.x;
+                const realY = container ? container.y : fire.y;
+
                 buildings.push({
                     type: 'campfire',
-                    x: fire.x,
-                    y: fire.y,
+                    x: realX,
+                    y: realY,
                     hp: fire.getData('hp') as number,
                     maxHp: fire.getData('maxHp') as number
                 });
@@ -3891,10 +3969,15 @@ export class GameScene extends Phaser.Scene {
         if (this.forges && this.forges.getChildren) {
             for (const obj of this.forges.getChildren()) {
                 const forge = obj as Phaser.GameObjects.Rectangle;
+                // La forge est dans un container
+                const container = forge.getData('container') as Phaser.GameObjects.Container | undefined;
+                const realX = container ? container.x : forge.x;
+                const realY = container ? container.y : forge.y;
+
                 buildings.push({
                     type: 'forge',
-                    x: forge.x,
-                    y: forge.y,
+                    x: realX,
+                    y: realY,
                     hp: forge.getData('hp') as number,
                     maxHp: forge.getData('maxHp') as number
                 });
@@ -3905,10 +3988,15 @@ export class GameScene extends Phaser.Scene {
         if (this.storages && this.storages.getChildren) {
             for (const obj of this.storages.getChildren()) {
                 const storage = obj as Phaser.GameObjects.Rectangle;
+                // Le storage est dans un container
+                const container = storage.getData('container') as Phaser.GameObjects.Container | undefined;
+                const realX = container ? container.x : storage.x;
+                const realY = container ? container.y : storage.y;
+
                 buildings.push({
                     type: 'storage',
-                    x: storage.x,
-                    y: storage.y,
+                    x: realX,
+                    y: realY,
                     hp: storage.getData('hp') as number,
                     maxHp: storage.getData('maxHp') as number,
                     capInc: storage.getData('capInc') as number
@@ -3920,10 +4008,15 @@ export class GameScene extends Phaser.Scene {
         if (this.barracks && this.barracks.getChildren) {
             for (const obj of this.barracks.getChildren()) {
                 const barrack = obj as Phaser.GameObjects.Rectangle;
+                // La caserne est dans un container
+                const container = barrack.getData('container') as Phaser.GameObjects.Container | undefined;
+                const realX = container ? container.x : barrack.x;
+                const realY = container ? container.y : barrack.y;
+
                 buildings.push({
                     type: 'barracks',
-                    x: barrack.x,
-                    y: barrack.y,
+                    x: realX,
+                    y: realY,
                     hp: barrack.getData('hp') as number,
                     maxHp: barrack.getData('maxHp') as number
                 });

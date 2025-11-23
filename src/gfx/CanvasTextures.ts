@@ -72,3 +72,323 @@ export function ensureSkeletonTexture(scene: Phaser.Scene): string {
   });
 }
 
+/**
+ * Texture du Chevalier (Knight) - Bleu armure lourde
+ */
+export function ensureKnightTexture(scene: Phaser.Scene): string {
+  return ensureCanvasTexture(scene, 'tex_knight', 28, 36, (ctx) => {
+    ctx.clearRect(0,0,28,36);
+
+    // Couleurs chevalier
+    const armor = '#4a7ba7'; // Bleu métallique
+    const armorLight = '#6a9bc7';
+    const armorDark = '#2a5b87';
+    const plume = '#c74444'; // Plume rouge
+    const metal = '#c0c0c0'; // Métal argent
+
+    // Casque avec visière
+    ctx.fillStyle = armor;
+    ctx.beginPath();
+    ctx.ellipse(14, 9, 7.5, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Plume rouge sur le casque
+    ctx.fillStyle = plume;
+    ctx.beginPath();
+    ctx.moveTo(14, 4);
+    ctx.quadraticCurveTo(12, 2, 10, 5);
+    ctx.quadraticCurveTo(11, 3, 14, 4);
+    ctx.fill();
+
+    // Visière (fente horizontale)
+    ctx.fillStyle = 'rgba(20,20,20,0.9)';
+    ctx.fillRect(9, 9, 10, 2);
+
+    // Détails casque
+    ctx.strokeStyle = armorLight;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(14, 9, 7.5, Math.PI * 1.2, Math.PI * 1.8);
+    ctx.stroke();
+
+    // Torse - armure à plaques
+    ctx.fillStyle = armorDark;
+    ctx.fillRect(10, 15, 8, 10);
+
+    ctx.fillStyle = armor;
+    ctx.fillRect(11, 16, 6, 8);
+
+    // Ligne centrale armure
+    ctx.strokeStyle = armorLight;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(14, 16);
+    ctx.lineTo(14, 24);
+    ctx.stroke();
+
+    // Bouclier (petit, sur le côté)
+    ctx.fillStyle = metal;
+    ctx.beginPath();
+    ctx.ellipse(7, 20, 3, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = armorDark;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Épée (sur l'autre côté)
+    ctx.strokeStyle = metal;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(21, 17);
+    ctx.lineTo(23, 23);
+    ctx.stroke();
+
+    // Garde épée
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(19, 18);
+    ctx.lineTo(25, 18);
+    ctx.stroke();
+
+    // Jambes blindées
+    ctx.fillStyle = armorDark;
+    ctx.fillRect(11, 25, 3, 8);
+    ctx.fillRect(14, 25, 3, 8);
+
+    // Bottes
+    ctx.fillStyle = armor;
+    ctx.fillRect(10, 33, 4, 3);
+    ctx.fillRect(14, 33, 4, 3);
+  });
+}
+
+/**
+ * Texture du Veilleur (Watcher) - Vert agile avec capuche
+ */
+export function ensureWatcherTexture(scene: Phaser.Scene): string {
+  return ensureCanvasTexture(scene, 'tex_watcher', 28, 36, (ctx) => {
+    ctx.clearRect(0,0,28,36);
+
+    // Couleurs veilleur
+    const cloak = '#3a5f3a'; // Vert forêt
+    const cloakDark = '#2a4f2a';
+    const leather = '#8b6f47'; // Cuir marron
+    const eye = '#90ee90'; // Vert lumineux
+
+    // Capuche
+    ctx.fillStyle = cloak;
+    ctx.beginPath();
+    ctx.arc(14, 9, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = cloakDark;
+    ctx.beginPath();
+    ctx.arc(14, 8, 7, 0, Math.PI);
+    ctx.fill();
+
+    // Visage dans l'ombre
+    ctx.fillStyle = 'rgba(20,20,20,0.95)';
+    ctx.beginPath();
+    ctx.ellipse(14, 10, 5, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Yeux brillants verts (signature du veilleur)
+    ctx.fillStyle = eye;
+    ctx.shadowColor = eye;
+    ctx.shadowBlur = 3;
+    ctx.beginPath();
+    ctx.ellipse(12, 10, 1.5, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(16, 10, 1.5, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Cape/manteau
+    ctx.fillStyle = cloak;
+    ctx.beginPath();
+    ctx.moveTo(9, 14);
+    ctx.lineTo(6, 28);
+    ctx.lineTo(9, 30);
+    ctx.lineTo(10, 15);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(19, 14);
+    ctx.lineTo(22, 28);
+    ctx.lineTo(19, 30);
+    ctx.lineTo(18, 15);
+    ctx.fill();
+
+    // Torse - armure légère en cuir
+    ctx.fillStyle = leather;
+    ctx.fillRect(11, 15, 6, 9);
+
+    // Sangles cuir
+    ctx.strokeStyle = cloakDark;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(11, 18);
+    ctx.lineTo(17, 18);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(11, 21);
+    ctx.lineTo(17, 21);
+    ctx.stroke();
+
+    // Dagues croisées (dans le dos visible)
+    ctx.strokeStyle = '#b0b0b0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(11, 17);
+    ctx.lineTo(9, 13);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(17, 17);
+    ctx.lineTo(19, 13);
+    ctx.stroke();
+
+    // Jambes
+    ctx.fillStyle = cloakDark;
+    ctx.fillRect(11, 24, 3, 9);
+    ctx.fillRect(14, 24, 3, 9);
+
+    // Bottes légères
+    ctx.fillStyle = leather;
+    ctx.fillRect(10, 33, 4, 3);
+    ctx.fillRect(14, 33, 4, 3);
+  });
+}
+
+/**
+ * Texture de l'Arbalétrier (Arbalest) - Rouge/Marron avec arbalète
+ */
+export function ensureArbalestTexture(scene: Phaser.Scene): string {
+  return ensureCanvasTexture(scene, 'tex_arbalest', 28, 36, (ctx) => {
+    ctx.clearRect(0,0,28,36);
+
+    // Couleurs arbalétrier
+    const tunic = '#a04040'; // Rouge/brun
+    const tunicDark = '#804020';
+    const wood = '#6b4423'; // Bois arbalète
+    const metal = '#c0c0c0';
+    const leather = '#5a4a3a';
+
+    // Chapeau/casque léger
+    ctx.fillStyle = leather;
+    ctx.beginPath();
+    ctx.ellipse(14, 8, 7, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bord du chapeau
+    ctx.fillStyle = tunicDark;
+    ctx.beginPath();
+    ctx.ellipse(14, 9, 8, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Visage
+    ctx.fillStyle = '#f4d0a8';
+    ctx.beginPath();
+    ctx.ellipse(14, 11, 4.5, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Yeux concentrés (tireur d'élite)
+    ctx.fillStyle = '#2a2a2a';
+    ctx.beginPath();
+    ctx.ellipse(12, 11, 1, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(16, 11, 1, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Tunique
+    ctx.fillStyle = tunic;
+    ctx.beginPath();
+    ctx.moveTo(10, 15);
+    ctx.lineTo(10, 26);
+    ctx.lineTo(18, 26);
+    ctx.lineTo(18, 15);
+    ctx.fill();
+
+    // Ceinture
+    ctx.fillStyle = leather;
+    ctx.fillRect(10, 23, 8, 2);
+
+    // Détails tunique
+    ctx.strokeStyle = tunicDark;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(14, 15);
+    ctx.lineTo(14, 26);
+    ctx.stroke();
+
+    // ARBALÈTE (caractéristique principale)
+    // Corps de l'arbalète
+    ctx.fillStyle = wood;
+    ctx.fillRect(19, 18, 8, 3);
+
+    // Arc de l'arbalète
+    ctx.strokeStyle = wood;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(23, 19.5, 5, -Math.PI * 0.4, Math.PI * 0.4);
+    ctx.stroke();
+
+    // Corde
+    ctx.strokeStyle = '#666666';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(20, 16);
+    ctx.lineTo(20, 23);
+    ctx.stroke();
+
+    // Mécanisme
+    ctx.fillStyle = metal;
+    ctx.fillRect(18, 19, 2, 2);
+
+    // Carreau (flèche)
+    ctx.strokeStyle = wood;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(15, 19.5);
+    ctx.lineTo(20, 19.5);
+    ctx.stroke();
+
+    // Pointe du carreau
+    ctx.fillStyle = metal;
+    ctx.beginPath();
+    ctx.moveTo(15, 19.5);
+    ctx.lineTo(13, 18.5);
+    ctx.lineTo(13, 20.5);
+    ctx.fill();
+
+    // Carquois sur le dos
+    ctx.fillStyle = leather;
+    ctx.fillRect(8, 16, 2, 8);
+    ctx.strokeStyle = tunicDark;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(9, 14);
+    ctx.lineTo(9, 16);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(7, 14);
+    ctx.lineTo(7, 16);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(11, 14);
+    ctx.lineTo(11, 16);
+    ctx.stroke();
+
+    // Jambes
+    ctx.fillStyle = tunicDark;
+    ctx.fillRect(11, 26, 3, 7);
+    ctx.fillRect(14, 26, 3, 7);
+
+    // Bottes
+    ctx.fillStyle = leather;
+    ctx.fillRect(10, 33, 4, 3);
+    ctx.fillRect(14, 33, 4, 3);
+  });
+}
+

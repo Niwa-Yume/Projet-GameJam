@@ -79,6 +79,9 @@ export class UIScene extends Phaser.Scene {
   // Overlay Pause
   private pauseContainer?: Phaser.GameObjects.Container;
 
+  // Popup Offline Progress
+  private offlineProgressContainer?: Phaser.GameObjects.Container;
+
   // Menu d'upgrade
   private upgradeMenuContainer?: Phaser.GameObjects.Container;
   private currentUpgradeBuilding?: Phaser.GameObjects.Rectangle;
@@ -761,7 +764,7 @@ export class UIScene extends Phaser.Scene {
     }).setOrigin(0.5).setScrollFactor(0);
 
     // Icône âme
-    this.drawDiamond(w / 2 - 80, h / 2 + 30, 12, this.theme.soulColor).setScrollFactor(0);
+    const diamond = this.drawDiamond(w / 2 - 80, h / 2 + 30, 12, this.theme.soulColor).setScrollFactor(0);
 
     // Âmes gagnées
     const soulsText = this.add.text(w / 2 - 50, h / 2 + 30, `+${data.soulsEarned} âmes gagnées !`, {
@@ -783,13 +786,19 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     // Clic pour fermer
-    const container = this.add.container(0, 0, [bg, panel, title, subtitle, timeText, soulsText, btnBg, btnTxt]);
+    const container = this.add.container(0, 0, [bg, panel, title, subtitle, timeText, diamond, soulsText, btnBg, btnTxt]);
     container.setDepth(2000);
+
+    // Stocker le container pour pouvoir le nettoyer si nécessaire
+    this.offlineProgressContainer = container;
 
     btnBg.on('pointerdown', () => {
       btnBg.setFillStyle(this.theme.buttonFillActive, 0.95);
       this.time.delayedCall(100, () => {
-        container.destroy(true);
+        if (container && container.scene) {
+          container.destroy(true);
+        }
+        this.offlineProgressContainer = undefined;
       });
     });
 
@@ -825,20 +834,44 @@ export class UIScene extends Phaser.Scene {
     this.registry.set('waveActive', false);
     this.registry.set('waveTotal', 0);
     this.registry.set('waveRemaining', 0);
+    this.registry.set('autoWaveMode', false);
+    this.registry.set('nextWaveIn', 0);
+    this.registry.set('soulProductionRate', 0.5);
+    this.registry.set('soulProductionMultiplier', 1.0);
+    this.registry.set('generatorCount', 0);
+    this.registry.set('totalSoulProduction', 0.5);
+    this.registry.set('offlineProgressData', null);
 
     // Nettoyer le flag AVANT de redémarrer
     this.gameOverShown = false;
 
-    // Ne PAS détruire manuellement le container, laisser Phaser le faire
-    // lors du restart de la scène
+    // IMPORTANT: Ne PAS détruire manuellement les containers
+    // Juste les vider et lâcher les références
+    // Phaser s'occupera de les détruire lors du shutdown
+    if (this.gameOverContainer && this.gameOverContainer.scene) {
+      this.gameOverContainer.removeAll(true); // Vider et détruire les enfants
+      this.gameOverContainer.setVisible(false); // Cacher
+    }
     this.gameOverContainer = undefined;
 
-    // Redémarrer GameScene (qui relancera UIScene dans son create())
+    if (this.pauseContainer && this.pauseContainer.scene) {
+      this.pauseContainer.removeAll(true);
+      this.pauseContainer.setVisible(false);
+    }
+    this.pauseContainer = undefined;
+
+    if (this.upgradeMenuContainer && this.upgradeMenuContainer.scene) {
+      this.upgradeMenuContainer.removeAll(true);
+      this.upgradeMenuContainer.setVisible(false);
+    }
+    this.upgradeMenuContainer = undefined;
+
+    // Redémarrer GameScene qui relancera UIScene automatiquement
     const gameScene = this.scene.get('GameScene');
     if (gameScene) {
-      // Redémarrer GameScene d'abord (qui stop UIScene automatiquement)
+      // Redémarrer directement - pas besoin de stop UIScene
+      // Le restart de GameScene s'occupera de tout
       gameScene.scene.restart();
-      // UIScene sera relancée automatiquement par GameScene.create()
     }
   }
 
@@ -1291,13 +1324,49 @@ export class UIScene extends Phaser.Scene {
    * Évite l'erreur "Cannot read properties of undefined (reading 'sys')"
    */
   shutdown(): void {
-    // Lâcher les références aux containers sans les détruire
-    // Phaser s'en occupera automatiquement
+    console.log('🧹 UIScene shutdown - Nettoyage des containers...');
+
+    // Vider les containers AVANT que Phaser ne les détruise
+    // Cela évite les erreurs de références invalides
+    if (this.gameOverContainer && this.gameOverContainer.scene) {
+      try {
+        this.gameOverContainer.removeAll(true);
+      } catch (e) {
+        console.warn('Erreur lors du nettoyage gameOverContainer:', e);
+      }
+    }
     this.gameOverContainer = undefined;
+
+    if (this.pauseContainer && this.pauseContainer.scene) {
+      try {
+        this.pauseContainer.removeAll(true);
+      } catch (e) {
+        console.warn('Erreur lors du nettoyage pauseContainer:', e);
+      }
+    }
     this.pauseContainer = undefined;
+
+    if (this.upgradeMenuContainer && this.upgradeMenuContainer.scene) {
+      try {
+        this.upgradeMenuContainer.removeAll(true);
+      } catch (e) {
+        console.warn('Erreur lors du nettoyage upgradeMenuContainer:', e);
+      }
+    }
     this.upgradeMenuContainer = undefined;
+
+    if (this.offlineProgressContainer && this.offlineProgressContainer.scene) {
+      try {
+        this.offlineProgressContainer.removeAll(true);
+      } catch (e) {
+        console.warn('Erreur lors du nettoyage offlineProgressContainer:', e);
+      }
+    }
+    this.offlineProgressContainer = undefined;
 
     // Nettoyer les listeners d'événements pour éviter les fuites mémoire
     this.registry.events.off('changedata');
+
+    console.log('✅ UIScene shutdown terminé');
   }
 }
