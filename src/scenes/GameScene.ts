@@ -286,7 +286,8 @@ export class GameScene extends Phaser.Scene {
             loop: true,
             callback: () => {
                 const buildingsData = this.collectBuildingsData();
-                SaveSystem.save(this.registry, buildingsData);
+                const alliesData = this.collectAlliesData();
+                SaveSystem.save(this.registry, buildingsData, alliesData);
             },
             callbackScope: this
         });
@@ -365,6 +366,11 @@ export class GameScene extends Phaser.Scene {
             this.restoreBuildings(saveData.buildings);
         } else {
             console.log('⚠️ Aucun bâtiment à restaurer');
+        }
+
+        // Restaurer les alliés depuis la sauvegarde
+        if (saveData && saveData.allies && saveData.allies.length > 0) {
+            this.restoreAllies(saveData.allies);
         }
 
         // Si le mode auto était actif, lancer la prochaine vague automatiquement après 3 secondes
@@ -2675,7 +2681,8 @@ export class GameScene extends Phaser.Scene {
             // 🔥 IMPORTANT: Sauvegarder immédiatement la fin de vague pour le calcul hors-ligne
             if (this.autoWaveMode) {
                 const buildingsData = this.collectBuildingsData();
-                SaveSystem.save(this.registry, buildingsData);
+                const alliesData = this.collectAlliesData();
+                SaveSystem.save(this.registry, buildingsData, alliesData);
                 console.log(`💾 Sauvegarde immédiate après vague ${currentWave} (mode auto actif)`);
             }
 
@@ -4290,6 +4297,30 @@ export class GameScene extends Phaser.Scene {
     }
 
     /**
+     * Collecte les données de tous les alliés pour la sauvegarde
+     */
+    public collectAlliesData(): import('../utils/SaveSystem').SavedAlly[] {
+        const alliesData: import('../utils/SaveSystem').SavedAlly[] = [];
+        if (!this.allies || !this.allies.getChildren) {
+            return alliesData;
+        }
+
+        for (const obj of this.allies.getChildren()) {
+            const ally = obj as Phaser.GameObjects.Image; // Les alliés sont des Images
+            alliesData.push({
+                kind: ally.getData('kind'),
+                x: ally.x,
+                y: ally.y,
+                level: ally.getData('level') || 1,
+                kills: ally.getData('kills') || 0,
+                hp: ally.getData('hp')
+            });
+        }
+        console.log('🛡️ Collecte de', alliesData.length, 'alliés pour la sauvegarde.');
+        return alliesData;
+    }
+
+    /**
      * Restaure les bâtiments depuis la sauvegarde
      */
     public restoreBuildings(buildings: import('../utils/SaveSystem').SavedBuilding[]): void {
@@ -4471,5 +4502,30 @@ export class GameScene extends Phaser.Scene {
         }
 
         console.log('✅ Restauration des bâtiments terminée !');
+    }
+
+    /**
+     * Restaure les alliés depuis la sauvegarde
+     */
+    public restoreAllies(allies: import('../utils/SaveSystem').SavedAlly[]): void {
+        console.log('🏗️ Restauration de', allies.length, 'alliés...');
+
+        for (const allyData of allies) {
+            // 1. Recrée l'allié de base
+            this.spawnAlly(allyData.kind);
+
+            // 2. Récupère l'objet qui vient d'être créé (c'est le dernier du groupe)
+            const newAlly = this.allies.getChildren()[this.allies.getLength() - 1] as Phaser.GameObjects.Image;
+
+            // 3. Restaure ses propriétés spécifiques
+            newAlly.setPosition(allyData.x, allyData.y);
+            newAlly.setData('level', allyData.level);
+            newAlly.setData('kills', allyData.kills);
+            newAlly.setData('hp', allyData.hp);
+
+            // 4. Met à jour son apparence (étoiles de vétéran, etc.)
+            this.updateAllyStars(newAlly, allyData.level);
+        }
+        console.log('✅ Restauration des alliés terminée !');
     }
 }

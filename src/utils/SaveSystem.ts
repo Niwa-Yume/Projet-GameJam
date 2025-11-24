@@ -4,13 +4,13 @@
  */
 
 // Ré-exporter les types pour compatibilité
-export type { SavedBuilding, GameSaveData, OfflineProgressResult } from '../types/SaveData';
+export type { SavedBuilding, SavedAlly, GameSaveData, OfflineProgressResult } from '../types/SaveData';
 
 // Importer les modules
 import { SaveManager } from './SaveManager';
 import { OfflineProgressCalculator } from './OfflineProgressCalculator';
 import { formatTimeElapsed } from './TimeFormatter';
-import type { SavedBuilding, GameSaveData, OfflineProgressResult } from '../types/SaveData';
+import type { SavedBuilding, SavedAlly, GameSaveData, OfflineProgressResult } from '../types/SaveData';
 
 /**
  * Classe principale du système de sauvegarde
@@ -21,9 +21,10 @@ export class SaveSystem {
    * Sauvegarde l'état actuel du jeu
    * @param registry Registre de données Phaser
    * @param buildingsData Liste des bâtiments à sauvegarder
+   * @param alliesData Liste des alliés à sauvegarder
    */
-  static save(registry: Phaser.Data.DataManager, buildingsData?: SavedBuilding[]): void {
-    SaveManager.save(registry, buildingsData);
+  static save(registry: Phaser.Data.DataManager, buildingsData?: SavedBuilding[], alliesData?: SavedAlly[]): void {
+    SaveManager.save(registry, buildingsData, alliesData);
   }
 
   /**
@@ -76,4 +77,3 @@ export class SaveSystem {
     window.location.reload();
   }
 }
-

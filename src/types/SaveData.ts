@@ -3,6 +3,18 @@
  */
 
 /**
+ * Interface pour sauvegarder un allié individuel
+ */
+export interface SavedAlly {
+  kind: 'knight' | 'watcher' | 'arbalest';
+  x: number;
+  y: number;
+  level: number;
+  kills: number;
+  hp: number;
+}
+
+/**
  * Interface pour sauvegarder un bâtiment individuel
  */
 export interface SavedBuilding {
@@ -45,6 +57,9 @@ export interface GameSaveData {
   // Liste complète des bâtiments avec leur position
   buildings: SavedBuilding[];
 
+  // Liste des alliés
+  allies?: SavedAlly[];
+
   // Progression des vagues hors-ligne
   autoWaveMode: boolean; // Mode automatique activé ?
   lastWaveCompletedTimestamp?: number; // Timestamp de la dernière vague terminée
@@ -69,4 +84,3 @@ export interface OfflineProgressResult {
   wavesCompleted: number;
   newWaveNumber: number;
 }
-

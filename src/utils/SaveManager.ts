@@ -3,7 +3,7 @@
  * Gère la lecture et l'écriture des données dans le navigateur
  */
 
-import type { GameSaveData, SavedBuilding } from '../types/SaveData';
+import type { GameSaveData, SavedBuilding, SavedAlly } from '../types/SaveData';
 
 export class SaveManager {
   private static readonly SAVE_KEY = 'veilOfShadows_save';
@@ -13,8 +13,9 @@ export class SaveManager {
    * Sauvegarde les données du jeu dans localStorage
    * @param registry Registre de données Phaser
    * @param buildingsData Liste des bâtiments à sauvegarder
+   * @param alliesData Liste des alliés à sauvegarder
    */
-  static save(registry: Phaser.Data.DataManager, buildingsData?: SavedBuilding[]): void {
+  static save(registry: Phaser.Data.DataManager, buildingsData?: SavedBuilding[], alliesData?: SavedAlly[]): void {
     const autoWaveMode = (registry.get('autoWaveMode') as boolean) ?? false;
     const waveActive = (registry.get('waveActive') as boolean) ?? false;
     const currentWave = (registry.get('wave') as number) ?? 0;
@@ -34,6 +35,7 @@ export class SaveManager {
       forgeCount: (registry.get('forgeCount') as number) ?? 0,
       barracksCount: (registry.get('barracksCount') as number) ?? 0,
       buildings: buildingsData ?? [],
+      allies: alliesData ?? [],
       autoWaveMode: autoWaveMode,
       lastWaveCompletedTimestamp: timestamp,
       lastSaveTimestamp: Date.now(),
@@ -47,6 +49,7 @@ export class SaveManager {
         'Âmes:', saveData.soulShards,
         '| Vague:', saveData.wave,
         '| Bâtiments:', saveData.buildings.length,
+        '| Alliés:', saveData.allies.length,
         '| Auto:', autoWaveMode,
         '| Active:', waveActive,
         '| Timestamp:', timestamp ? '✅' : '❌'
@@ -78,8 +81,14 @@ export class SaveManager {
         console.warn('⚠️ Ancienne sauvegarde détectée - initialisation buildings: []');
         saveData.buildings = [];
       }
+      
+      // Initialiser allies si la propriété n'existe pas (ancienne sauvegarde)
+      if (!saveData.allies) {
+        console.warn('⚠️ Ancienne sauvegarde détectée - initialisation allies: []');
+        saveData.allies = [];
+      }
 
-      console.log('📂 Sauvegarde chargée ! Bâtiments:', saveData.buildings?.length ?? 0);
+      console.log('📂 Sauvegarde chargée ! Bâtiments:', saveData.buildings?.length ?? 0, '| Alliés:', saveData.allies?.length ?? 0);
       return saveData;
     } catch (error) {
       console.error('❌ Erreur de chargement:', error);
@@ -117,4 +126,3 @@ export class SaveManager {
     return this.SAVE_VERSION;
   }
 }
-
