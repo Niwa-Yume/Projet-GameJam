@@ -37,6 +37,7 @@ export class SaveManager {
       buildings: buildingsData ?? [],
       allies: alliesData ?? [],
       autoWaveMode: autoWaveMode,
+      autoRecruitEnabled: (registry.get('autoRecruitEnabled') as boolean) ?? false,
       lastWaveCompletedTimestamp: timestamp,
       lastSaveTimestamp: Date.now(),
       version: this.SAVE_VERSION
@@ -49,7 +50,7 @@ export class SaveManager {
         'Âmes:', saveData.soulShards,
         '| Vague:', saveData.wave,
         '| Bâtiments:', saveData.buildings.length,
-        '| Alliés:', saveData.allies.length,
+        '| Alliés:', (saveData.allies ?? []).length,
         '| Auto:', autoWaveMode,
         '| Active:', waveActive,
         '| Timestamp:', timestamp ? '✅' : '❌'
@@ -86,6 +87,11 @@ export class SaveManager {
       if (!saveData.allies) {
         console.warn('⚠️ Ancienne sauvegarde détectée - initialisation allies: []');
         saveData.allies = [];
+      }
+
+      // Initialiser autoRecruitEnabled si la propriété n'existe pas (ancienne sauvegarde)
+      if (saveData.autoRecruitEnabled === undefined) {
+        saveData.autoRecruitEnabled = false;
       }
 
       console.log('📂 Sauvegarde chargée ! Bâtiments:', saveData.buildings?.length ?? 0, '| Alliés:', saveData.allies?.length ?? 0);

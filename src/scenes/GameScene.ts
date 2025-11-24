@@ -189,6 +189,12 @@ export class GameScene extends Phaser.Scene {
                 this.registry.set('autoWaveMode', true);
             }
 
+            // Restaurer l'auto-recrutement
+            if (saveData.autoRecruitEnabled) {
+                this.autoRecruitEnabled = true;
+                this.registry.set('autoRecruitEnabled', true);
+            }
+
             // Restaurer les coûts et production (IMPORTANT: mettre dans le registre aussi !)
             this.towerCost = saveData.towerCost;
             this.soulProductionRate = saveData.soulProductionRate;
@@ -3027,6 +3033,7 @@ export class GameScene extends Phaser.Scene {
     // Toggle l'auto-recrutement (IDLE GAME)
     public toggleAutoRecruit(): void {
         this.autoRecruitEnabled = !this.autoRecruitEnabled;
+        this.registry.set('autoRecruitEnabled', this.autoRecruitEnabled);
         console.log(`🤖 Auto-recrutement: ${this.autoRecruitEnabled ? 'ACTIVÉ' : 'DÉSACTIVÉ'}`);
 
         if (this.autoRecruitEnabled) {

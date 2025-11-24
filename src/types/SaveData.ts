@@ -62,6 +62,7 @@ export interface GameSaveData {
 
   // Progression des vagues hors-ligne
   autoWaveMode: boolean; // Mode automatique activé ?
+  autoRecruitEnabled?: boolean;
   lastWaveCompletedTimestamp?: number; // Timestamp de la dernière vague terminée
 
   // Timestamp de sauvegarde
