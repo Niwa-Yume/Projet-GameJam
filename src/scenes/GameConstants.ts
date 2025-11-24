@@ -14,14 +14,14 @@ export class GameConstants {
   // ========== ENNEMIS ==========
   static readonly ENEMY_SPEED = 80;
   static readonly ENEMY_DPS = 30; // Dégâts par seconde infligés aux bâtiments
-  static readonly ATTACK_RANGE = 28; // Rayon pour contact avec bâtiment 48x48
+  static readonly ATTACK_RANGE = 48; // Rayon pour contact avec bâtiment 48x48
   static readonly SHARD_REWARD = 5; // Récompense par kill
 
   // ========== MINI-BOSS (tous les 5 niveaux) ==========
   static readonly BOSS_WAVE_INTERVAL = 5; // Apparaît toutes les 5 vagues
   static readonly BOSS_HP_MULTIPLIER = 5; // 5x plus de HP
   static readonly BOSS_SPEED_MULTIPLIER = 1.3; // 30% plus rapide
-  static readonly BOSS_DPS_MULTIPLIER = 2; // 2x plus de dégâts
+  static readonly BOSS_DPS_MULTIPLIER = 3; // 2x plus de dégâts
   static readonly BOSS_SIZE_MULTIPLIER = 1.8; // 80% plus gros
   static readonly BOSS_REWARD_MULTIPLIER = 10; // 10x la récompense normale
 

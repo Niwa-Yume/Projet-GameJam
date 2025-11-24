@@ -54,8 +54,6 @@ export class GameScene extends Phaser.Scene {
     private trainingQueue: Array<'knight' | 'watcher' | 'arbalest'> = [];
     private activeTrainings: Phaser.Time.TimerEvent[] = [];
 
-    // Pathfinding (utilise maintenant PathfindingGrid)
-    // ... removed old gridCols, gridRows, blocked ...
 
     // État de vague
     private waveActive: boolean = false;
@@ -67,7 +65,7 @@ export class GameScene extends Phaser.Scene {
     // Système d'auto-recrutement (IDLE GAME)
     private autoRecruitEnabled: boolean = false;
     private lastAutoRecruitTime: number = 0;
-    private autoRecruitInterval: number = 15000; // 15 secondes
+    private autoRecruitInterval: number = 1000; // 1 secondes
 
     // Système d'auto-upgrade des alliés (IDLE GAME)
     private autoUpgradeEnabled: boolean = false;
@@ -258,7 +256,8 @@ export class GameScene extends Phaser.Scene {
         this.towers = this.add.group();
         this.bullets = this.physics.add.group();  // Groupe physique pour les projectiles
         this.enemies = this.physics.add.group();  // Groupe physique pour les ennemis
-        this.walls = this.add.group();
+        this.walls = this.physics.add.staticGroup();
+        this.physics.add.collider(this.enemies, this.walls);
         this.generators = this.add.group();
         this.campfires = this.add.group();
         this.forges = this.add.group();
@@ -803,7 +802,7 @@ export class GameScene extends Phaser.Scene {
         wall.setData('maxHp', 200);
         wall.setData('container', wallContainer);
 
-        this.walls.add(wall);
+        this.walls.add(wallContainer);
         attachHealthBar(this, wall);
 
         // Interaction clic droit pour vendre
@@ -814,16 +813,6 @@ export class GameScene extends Phaser.Scene {
             }
         });
 
-        wall.once(Phaser.GameObjects.Events.DESTROY, () => {
-            // Détruire le container visuel
-            if (wallContainer && wallContainer.scene) {
-                wallContainer.destroy();
-            }
-            // Retirer du groupe sans toucher au display list
-            if (this.walls.contains(wall)) this.walls.remove(wall, false, false);
-            this.recomputeGrid();
-            this.recomputeAllEnemyPaths();
-        });
 
         // Recompute dès placement
         this.recomputeGrid();
@@ -2641,20 +2630,19 @@ export class GameScene extends Phaser.Scene {
                 this.updateHealthBar(target);
                 if (newHp <= 0) {
                     // Détruire le bâtiment et reprendre la marche
-                    // Retirer des groupes AVANT destroy pour éviter double-destruction
-                    if (this.towers.contains(target)) this.towers.remove(target, true, false);
-                    if (this.walls.contains(target)) this.walls.remove(target, true, false);
-                    if (this.generators.contains(target)) this.generators.remove(target, true, false);
-                    if (this.campfires.contains(target)) this.campfires.remove(target, true, false);
-                    if (this.forges.contains(target)) this.forges.remove(target, true, false);
-                    if (this.storages.contains(target)) this.storages.remove(target, true, false);
-                    if (this.barracks.contains(target)) this.barracks.remove(target, true, false);
-                    target.destroy();
+                    const container = target.getData('container') as Phaser.GameObjects.Container | undefined;
+                    if (container && container.scene) {
+                        container.destroy();
+                    } else {
+                        target.destroy(); // Sécurité si un bâtiment n'a pas de conteneur
+                    }
                     enemy.setData('target', undefined);
-                    // Recalculer path car la topologie a changé
+
+                    // Recalculer le pathfinding maintenant que le mur est détruit
                     this.recomputeGrid();
                     this.recomputeAllEnemyPaths();
-                    // Reprendre
+
+                    // Reprendre la marche
                     this.updateEnemyVelocityAlongPath(enemy);
                 }
             }
