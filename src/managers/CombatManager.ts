@@ -1,4 +1,3 @@
-
 import Phaser from 'phaser';
 import { GameConstants } from '../scenes/GameConstants';
 import { BuildingManager } from './BuildingManager';
@@ -11,21 +10,20 @@ type EnemyGO = Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
 export class CombatManager {
     private scene: Phaser.Scene;
     private buildingManager: BuildingManager;
-    private allyManager: AllyManager;
+    // CORRECTION: suppression allyManager
     private enemyManager: EnemyManager;
     private bullets: Phaser.Physics.Arcade.Group;
 
-    constructor(scene: Phaser.Scene, buildingManager: BuildingManager, allyManager: AllyManager, enemyManager: EnemyManager, bulletsGroup: Phaser.Physics.Arcade.Group) {
+    constructor(scene: Phaser.Scene, buildingManager: BuildingManager, _allyManager: AllyManager, enemyManager: EnemyManager, bulletsGroup: Phaser.Physics.Arcade.Group) {
         this.scene = scene;
         this.buildingManager = buildingManager;
-        this.allyManager = allyManager;
         this.enemyManager = enemyManager;
         this.bullets = bulletsGroup;
 
         this.scene.game.events.on('fire-bullet', this.fireBullet, this);
         this.scene.physics.add.overlap(this.bullets, this.enemyManager.getEnemies(), this.onBulletHitEnemy, undefined, this);
     }
-
+// ... le reste du fichier est identique ...
     public update(time: number): void {
         this.updateTowers(time);
         this.cleanupBullets();
@@ -67,18 +65,18 @@ export class CombatManager {
             const bullet = this.scene.add.rectangle(data.x, data.y, 10, 10, 0, 0).setDepth(12);
             const fireball = this.scene.add.graphics({ x: data.x, y: data.y }).setDepth(12).setBlendMode(Phaser.BlendModes.ADD);
             const fireTimer = this.scene.time.addEvent({ delay: 16, loop: true, callback: () => {
-                if (!fireball.scene) return;
-                fireball.clear();
-                const time = Date.now() * 0.01, flicker = Math.sin(time) * 0.2 + 0.8;
-                fireball.fillStyle(0xff6633, 0.9 * flicker).fillCircle(0, 0, 5);
-                fireball.fillStyle(0xff8844, 0.7 * flicker).fillCircle(0, 0, 7);
-                fireball.fillStyle(0xffaa44, 0.5 * flicker).fillCircle(0, 0, 9);
-                for (let i = 0; i < 4; i++) {
-                    const angle = time * 0.5 + (i * Math.PI / 2), dist = 6 + Math.sin(time + i) * 2;
-                    fireball.fillStyle(0xffcc66, 0.6 * flicker).fillCircle(Math.cos(angle) * dist, Math.sin(angle) * dist, 2);
-                }
-                fireball.setPosition(bullet.x, bullet.y);
-            }});
+                    if (!fireball.scene) return;
+                    fireball.clear();
+                    const time = Date.now() * 0.01, flicker = Math.sin(time) * 0.2 + 0.8;
+                    fireball.fillStyle(0xff6633, 0.9 * flicker).fillCircle(0, 0, 5);
+                    fireball.fillStyle(0xff8844, 0.7 * flicker).fillCircle(0, 0, 7);
+                    fireball.fillStyle(0xffaa44, 0.5 * flicker).fillCircle(0, 0, 9);
+                    for (let i = 0; i < 4; i++) {
+                        const angle = time * 0.5 + (i * Math.PI / 2), dist = 6 + Math.sin(time + i) * 2;
+                        fireball.fillStyle(0xffcc66, 0.6 * flicker).fillCircle(Math.cos(angle) * dist, Math.sin(angle) * dist, 2);
+                    }
+                    fireball.setPosition(bullet.x, bullet.y);
+                }});
             bullet.setData({ fireballGraphics: fireball, fireTimer });
             this.bullets.add(bullet);
             this.scene.physics.add.existing(bullet);
@@ -105,10 +103,10 @@ export class CombatManager {
     private onBulletHitEnemy(bulletObj: any, enemyObj: any): void {
         const bulletGO = bulletObj.gameObject ?? bulletObj;
         const enemyGO = enemyObj.gameObject ?? enemyObj;
-        
+
         if (this.bullets.contains(bulletGO as any)) this.bullets.remove(bulletGO as any, true, false);
         bulletGO.destroy();
-        
+
         const health = enemyGO.getData('health') as HealthComponent;
         if (health) {
             health.takeDamage(1);

@@ -65,4 +65,11 @@ export class NotificationManager {
             shadow: { offsetX: 0, offsetY: 1, color: '#000', blur: 1, fill: true }
         };
     }
+
+    public destroy(): void {
+        this.scene.game.events.off('notify', this.showToast, this);
+        this.tooltipBg?.destroy();
+        this.tooltipTxt?.destroy();
+        this.toasts.forEach(t => t.destroy());
+    }
 }

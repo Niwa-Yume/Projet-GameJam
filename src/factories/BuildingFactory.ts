@@ -62,7 +62,7 @@ export class BuildingFactory {
         tower.on('pointerout', () => rangeGfx.setVisible(false));
         tower.on('pointerdown', (p: Phaser.Input.Pointer) => { if (!p.rightButtonDown()) buildingManager.showUpgradeMenu(towerContainer, 'tower'); });
         towerContainer.once(Phaser.GameObjects.Events.DESTROY, () => { rangeGfx.destroy(); fireTimer.remove(); });
-        console.log(`BuildingFactory: Created Tower Container with ID: ${towerContainer.id}`); // Debug log
+
         return towerContainer;
     }
 
@@ -77,7 +77,7 @@ export class BuildingFactory {
         wallContainer.setData({ interactiveChild: wall });
         attachHealthBar(this.scene, wallContainer);
         wall.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) buildingManager.showUpgradeMenu(wallContainer, 'wall'); });
-        console.log(`BuildingFactory: Created Wall Container with ID: ${wallContainer.id}`); // Debug log
+
         return wallContainer;
     }
 
@@ -162,7 +162,7 @@ export class BuildingFactory {
             riftTimer.remove();
             genTimer.remove();
         });
-        console.log(`BuildingFactory: Created Generator Container with ID: ${genContainer.id}`); // Debug log
+
         return genContainer;
     }
     private createCampfire(x: number, y: number, buildingManager: any): Phaser.GameObjects.Container {
@@ -179,7 +179,7 @@ export class BuildingFactory {
         fireContainer.setData({ interactiveChild: fire });
         attachHealthBar(this.scene, fireContainer);
         fire.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) buildingManager.showUpgradeMenu(fireContainer, 'campfire'); });
-        console.log(`BuildingFactory: Created Campfire Container with ID: ${fireContainer.id}`); // Debug log
+
         return fireContainer;
     }
     private createForge(x: number, y: number, buildingManager: any): Phaser.GameObjects.Container {
@@ -196,7 +196,7 @@ export class BuildingFactory {
         forgeContainer.setData({ interactiveChild: forge });
         attachHealthBar(this.scene, forgeContainer);
         forge.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) buildingManager.showUpgradeMenu(forgeContainer, 'forge'); });
-        console.log(`BuildingFactory: Created Forge Container with ID: ${forgeContainer.id}`); // Debug log
+
         return forgeContainer;
     }
     private createStorage(x: number, y: number, buildingManager: any): Phaser.GameObjects.Container {
@@ -210,7 +210,7 @@ export class BuildingFactory {
         storageContainer.setData({ interactiveChild: stor, capInc: 50 });
         attachHealthBar(this.scene, storageContainer);
         stor.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) buildingManager.showUpgradeMenu(storageContainer, 'storage'); });
-        console.log(`BuildingFactory: Created Storage Container with ID: ${storageContainer.id}`); // Debug log
+
         return storageContainer;
     }
     private createBarracks(x: number, y: number, buildingManager: any): Phaser.GameObjects.Container {
@@ -224,7 +224,7 @@ export class BuildingFactory {
         barracksContainer.setData({ interactiveChild: br });
         attachHealthBar(this.scene, barracksContainer);
         br.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) buildingManager.showUpgradeMenu(barracksContainer, 'barracks'); });
-        console.log(`BuildingFactory: Created Barracks Container with ID: ${barracksContainer.id}`); // Debug log
+
         return barracksContainer;
     }
 }

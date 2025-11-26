@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 
-export function attachHealthBar(scene: Phaser.Scene, go: Phaser.GameObjects.Rectangle): void {
+export function attachHealthBar(scene: Phaser.Scene, go: Phaser.GameObjects.Container | Phaser.GameObjects.Rectangle): void {
   const bar = scene.add.graphics().setDepth(go.depth + 1);
   go.setData('hpBar', bar);
-  const redraw = () => updateHealthBar(go);
+  const redraw = () => updateHealthBar(go as Phaser.GameObjects.Rectangle);
   go.on(Phaser.GameObjects.Events.DESTROY, () => { bar.destroy(); });
   redraw();
 }

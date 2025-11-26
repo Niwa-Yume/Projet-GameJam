@@ -1,4 +1,3 @@
-
 import Phaser from 'phaser';
 import { GameConstants } from '../scenes/GameConstants';
 import { BuildingManager } from './BuildingManager';
@@ -19,11 +18,11 @@ export class AllyManager {
     private trainingQueue: Array<'knight' | 'watcher' | 'arbalest'> = [];
     private activeTrainings: Phaser.Time.TimerEvent[] = [];
 
-    public autoRecruitEnabled: boolean = false; // Made public for UIScene access
+    public autoRecruitEnabled: boolean = false;
     private lastAutoRecruitTime: number = 0;
     private autoRecruitInterval: number = 1000;
 
-    public autoUpgradeEnabled: boolean = false; // Made public for UIScene access
+    public autoUpgradeEnabled: boolean = false;
     private lastAutoUpgradeCheck: number = 0;
     private autoUpgradeInterval: number = 5000;
 
@@ -36,9 +35,8 @@ export class AllyManager {
         this.factory = new AllyFactory(scene);
 
         this.autoRecruitEnabled = this.scene.registry.get('autoRecruitEnabled') ?? false;
-        this.autoUpgradeEnabled = this.scene.registry.get('autoUpgradeEnabled') ?? false; // Initialize autoUpgradeEnabled from registry
+        this.autoUpgradeEnabled = this.scene.registry.get('autoUpgradeEnabled') ?? false;
 
-        // Register for scene shutdown to clean up timers
         this.scene.events.on(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
     }
 
@@ -47,7 +45,7 @@ export class AllyManager {
         this.updateIdleSystems(time);
         this.updateAllyVisuals();
     }
-    
+
     private updateAllyVisuals(): void {
         for (const ally of this.allies.getChildren() as any[]) {
             const stars = ally.getData('stars');
@@ -87,13 +85,13 @@ export class AllyManager {
         const def = GameConstants.UNIT_DEFS[kind];
         console.log(`AllyManager: Starting training for ${kind}. Duration: ${def.trainMs}ms`);
         const timer = this.scene.time.addEvent({ delay: def.trainMs, callback: () => {
-            this.spawnAlly(kind);
-            const idx = this.activeTrainings.indexOf(timer);
-            if (idx >= 0) this.activeTrainings.splice(idx, 1);
-            const next = this.trainingQueue.shift();
-            if (next) this.startTraining(next);
-            console.log(`AllyManager: Finished training for ${kind}. Queue length: ${this.trainingQueue.length}`);
-        }});
+                this.spawnAlly(kind);
+                const idx = this.activeTrainings.indexOf(timer);
+                if (idx >= 0) this.activeTrainings.splice(idx, 1);
+                const next = this.trainingQueue.shift();
+                if (next) this.startTraining(next);
+                console.log(`AllyManager: Finished training for ${kind}. Queue length: ${this.trainingQueue.length}`);
+            }});
         this.activeTrainings.push(timer);
     }
 
@@ -110,14 +108,16 @@ export class AllyManager {
         this.allies.add(allySprite);
         const def = GameConstants.UNIT_DEFS[kind];
         allySprite.setData({ kind, nextAtk: 0, kills: 0, level: 1, damage: def.damage });
-        new HealthComponent(allySprite, def.hp); // Ensure HealthComponent is created and attached
+        new HealthComponent(allySprite, def.hp);
         console.log(`AllyManager: Spawned ${kind} at (${sx}, ${sy}). Total allies: ${this.allies.getLength()}`);
     }
 
     private updateAlliesAI(time: number): void {
         for (const a of this.allies.getChildren()) {
             const ally = a as any;
-            const def = GameConstants.UNIT_DEFS[ally.getData('kind')];
+            // CORRECTION: Cast explicite pour la clé
+            const kind = ally.getData('kind') as keyof typeof GameConstants.UNIT_DEFS;
+            const def = GameConstants.UNIT_DEFS[kind];
             const target = this.findTarget(ally.x, ally.y, def.role === 'ranged' ? def.atkRange : 220);
             const body = ally.body as Phaser.Physics.Arcade.Body | undefined;
             if (target) {
@@ -136,13 +136,13 @@ export class AllyManager {
                 } else { // Melee
                     if (d <= def.atkRange + 6) {
                         if (time >= (ally.getData('nextAtk') ?? 0)) {
-                            // Melee allies now deal damage to enemy HealthComponent
                             const enemyHealth = target.getData('health') as HealthComponent;
                             if (enemyHealth) {
                                 enemyHealth.takeDamage(ally.getData('damage'));
-                                console.log(`AllyManager: Melee ally ${ally.getData('kind')} attacked enemy (ID: ${target.id}). Damage: ${ally.getData('damage')}`);
+                                // CORRECTION: suppression .id
+                                console.log(`AllyManager: Melee ally ${ally.getData('kind')} attacked enemy. Damage: ${ally.getData('damage')}`);
                             }
-                            
+
                             ally.setData('nextAtk', time + def.atkRateMs);
                             ally.setData('kills', (ally.getData('kills') || 0) + 1);
                             allyAttackEffect(this.scene, ally);
@@ -161,7 +161,7 @@ export class AllyManager {
             }
         }
     }
-    
+
     private findTarget(x: number, y: number, range: number): EnemyGO | null {
         let best: EnemyGO | null = null;
         let bestD = Number.POSITIVE_INFINITY;
@@ -176,15 +176,13 @@ export class AllyManager {
         const len = Math.hypot(toX - fromX, toY - fromY) || 1;
         body.setVelocity((toX - fromX) / len * speed, (toY - fromY) / len * speed);
     }
-    
+
     private updateIdleSystems(time: number): void {
         if (this.autoRecruitEnabled && (time - this.lastAutoRecruitTime >= this.autoRecruitInterval)) {
-            console.log("AllyManager: Attempting auto-recruit.");
             this.processAutoRecruit();
             this.lastAutoRecruitTime = time;
         }
         if (this.autoUpgradeEnabled && (time - this.lastAutoUpgradeCheck >= this.autoUpgradeInterval)) {
-            console.log("AllyManager: Attempting auto-upgrade.");
             this.processAutoUpgrade();
             this.lastAutoUpgradeCheck = time;
         }
@@ -200,26 +198,21 @@ export class AllyManager {
     private processAutoRecruit(): void {
         const barracksCount = (this.scene.registry.get('barracksCount') as number) ?? 0;
         if (barracksCount <= 0) {
-            console.log("AllyManager: Auto-recruit skipped, no barracks.");
             return;
         }
         const randomType = Phaser.Utils.Array.GetRandom(['knight', 'watcher', 'arbalest']);
         const def = GameConstants.UNIT_DEFS[randomType as 'knight' | 'watcher' | 'arbalest'];
         const soulShards = (this.scene.registry.get('soulShards') as number) ?? 0;
 
-        console.log(`AllyManager: Auto-recruit check: Shards: ${soulShards}, Cost for ${randomType}: ${def.cost}`);
-
         if (soulShards >= def.cost) {
             this.recruitUnit(randomType as 'knight' | 'watcher' | 'arbalest');
             console.log(`AllyManager: Auto-recruited ${randomType}.`);
-        } else {
-            console.log("AllyManager: Auto-recruit skipped, not enough shards.");
         }
     }
 
     public toggleAutoUpgrade(): void {
         this.autoUpgradeEnabled = !this.autoUpgradeEnabled;
-        this.scene.registry.set('autoUpgradeEnabled', this.autoUpgradeEnabled); // Persist autoUpgradeEnabled in registry
+        this.scene.registry.set('autoUpgradeEnabled', this.autoUpgradeEnabled);
         this.scene.game.events.emit('notify', `Auto-upgrade ${this.autoUpgradeEnabled ? 'activé' : 'désactivé'}`, this.autoUpgradeEnabled ? 'success' : 'info');
         console.log(`AllyManager: Auto-upgrade toggled to ${this.autoUpgradeEnabled}`);
     }
@@ -248,14 +241,14 @@ export class AllyManager {
         if (!def) return;
         const hpMultipliers = { 1: 1.0, 2: 1.2, 3: 1.4, 4: 1.7, 5: 2.0 };
         const dmgMultipliers = { 1: 1.0, 2: 1.1, 3: 1.25, 4: 1.5, 5: 2.0 };
-        
+
         const healthComponent = ally.getData('health') as HealthComponent;
         if (healthComponent) {
             const newMaxHP = def.hp * hpMultipliers[level as keyof typeof hpMultipliers];
             healthComponent.setMaxHp(newMaxHP);
             healthComponent.heal(newMaxHP); // Full heal on level up
         }
-        
+
         ally.setData('damage', def.damage * dmgMultipliers[level as keyof typeof dmgMultipliers]);
     }
 
@@ -278,7 +271,7 @@ export class AllyManager {
             this.scene.tweens.add({ targets: aura, scaleX: 1.2, scaleY: 1.2, alpha: 0.4, duration: 1000, yoyo: true, repeat: -1 });
         }
     }
-    
+
     public collectAlliesData(): any[] {
         const alliesData: any[] = [];
         if (!this.allies?.getChildren) return alliesData;
@@ -287,7 +280,7 @@ export class AllyManager {
             const healthComponent = ally.getData('health') as HealthComponent;
             alliesData.push({
                 kind: ally.getData('kind'), x: ally.x, y: ally.y,
-                level: ally.getData('level') || 1, kills: ally.getData('kills') || 0, 
+                level: ally.getData('level') || 1, kills: ally.getData('kills') || 0,
                 hp: healthComponent ? healthComponent.getHp() : ally.getData('hp')
             });
         }
@@ -321,12 +314,9 @@ export class AllyManager {
 
     public destroy(): void {
         console.log("AllyManager: Destroying...");
-        // Remove all active training timers
         this.activeTrainings.forEach(timer => timer.remove(false));
         this.activeTrainings = [];
-        this.trainingQueue = []; // Clear the queue
-
-        // Remove event listeners
+        this.trainingQueue = [];
         this.scene.events.off(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
         console.log("AllyManager: Destroyed.");
     }

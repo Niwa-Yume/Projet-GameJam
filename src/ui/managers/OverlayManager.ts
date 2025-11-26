@@ -6,7 +6,6 @@ export class OverlayManager {
     private scene: Phaser.Scene;
     private gameOverContainer?: Phaser.GameObjects.Container;
     private pauseContainer?: Phaser.GameObjects.Container;
-    private offlineProgressContainer?: Phaser.GameObjects.Container;
 
     private theme = {
         panelFill: 0x1a1816,
@@ -52,12 +51,10 @@ export class OverlayManager {
         const btnTxt = this.scene.add.text(w / 2, h / 2 + 85, 'Continuer', this.txtStyle(18)).setOrigin(0.5).setScrollFactor(0);
         const container = this.scene.add.container(0, 0, [bg, panel, title, subtitle, timeText, diamond, soulsText, btnBg, btnTxt]);
         container.setDepth(2000);
-        this.offlineProgressContainer = container;
         btnBg.on('pointerdown', () => {
             btnBg.setFillStyle(0x4a4030, 0.95);
             this.scene.time.delayedCall(100, () => {
                 if (container && container.scene) container.destroy(true);
-                this.offlineProgressContainer = undefined;
             });
         });
     }
@@ -96,5 +93,11 @@ export class OverlayManager {
             strokeThickness: 0.5,
             shadow: { offsetX: 0, offsetY: 1, color: '#000', blur: 1, fill: true }
         };
+    }
+
+    public destroy(): void {
+        this.scene.input.keyboard?.off('keydown-ESC', this.togglePause, this);
+        this.gameOverContainer?.destroy();
+        this.pauseContainer?.destroy();
     }
 }

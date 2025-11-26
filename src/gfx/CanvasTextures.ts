@@ -111,322 +111,496 @@ export function ensureBossSkeletonTexture(scene: Phaser.Scene): string {
 }
 
 /**
- * Texture du Chevalier (Knight) - Bleu armure lourde
+ * Texture du Chevalier (Knight) - Style Elite Knight Dark Souls
+ * Armure sombre usée par le temps, épaulières imposantes, casque fermé
  */
 export function ensureKnightTexture(scene: Phaser.Scene): string {
   return ensureCanvasTexture(scene, 'tex_knight', 28, 36, (ctx) => {
     ctx.clearRect(0,0,28,36);
 
-    // Couleurs chevalier
-    const armor = '#4a7ba7'; // Bleu métallique
-    const armorLight = '#6a9bc7';
-    const armorDark = '#2a5b87';
-    const plume = '#c74444'; // Plume rouge
-    const metal = '#c0c0c0'; // Métal argent
+    // Couleurs Dark Souls - armure sombre et usée
+    const armorDark = '#2a2a2a';
+    const armorMid = '#3d3d3d';
+    const armorLight = '#555555';
+    const rust = '#4a3528';
+    const cape = '#1a1a1a';
+    const capeHighlight = '#2d2525';
+    const eyeGlow = '#cc4400';
 
-    // Casque avec visière
-    ctx.fillStyle = armor;
+    // Cape déchirée dans le dos
+    ctx.fillStyle = cape;
     ctx.beginPath();
-    ctx.ellipse(14, 9, 7.5, 7, 0, 0, Math.PI * 2);
+    ctx.moveTo(8, 14);
+    ctx.lineTo(5, 32);
+    ctx.lineTo(8, 34);
+    ctx.lineTo(11, 33);
+    ctx.lineTo(10, 15);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(20, 14);
+    ctx.lineTo(23, 32);
+    ctx.lineTo(20, 34);
+    ctx.lineTo(17, 33);
+    ctx.lineTo(18, 15);
+    ctx.fill();
+    // Déchirures
+    ctx.fillStyle = capeHighlight;
+    ctx.fillRect(6, 30, 2, 3);
+    ctx.fillRect(21, 28, 2, 4);
+
+    // Casque fermé Elite Knight style
+    ctx.fillStyle = armorMid;
+    ctx.beginPath();
+    ctx.ellipse(14, 9, 8, 7, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Plume rouge sur le casque
-    ctx.fillStyle = plume;
+    // Visière en T (style Dark Souls)
+    ctx.fillStyle = 'rgba(0,0,0,0.95)';
+    ctx.fillRect(10, 8, 8, 2);
+    ctx.fillRect(13, 8, 2, 5);
+
+    // Lueur orange dans la visière
+    ctx.fillStyle = eyeGlow;
+    ctx.shadowColor = eyeGlow;
+    ctx.shadowBlur = 4;
     ctx.beginPath();
-    ctx.moveTo(14, 4);
-    ctx.quadraticCurveTo(12, 2, 10, 5);
-    ctx.quadraticCurveTo(11, 3, 14, 4);
+    ctx.ellipse(12, 9, 1, 0.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(16, 9, 1, 0.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Crête du casque
+    ctx.fillStyle = armorLight;
+    ctx.beginPath();
+    ctx.moveTo(14, 2);
+    ctx.lineTo(12, 5);
+    ctx.lineTo(16, 5);
     ctx.fill();
 
-    // Visière (fente horizontale)
-    ctx.fillStyle = 'rgba(20,20,20,0.9)';
-    ctx.fillRect(9, 9, 10, 2);
-
-    // Détails casque
-    ctx.strokeStyle = armorLight;
+    // Épaulières imposantes
+    ctx.fillStyle = armorDark;
+    ctx.beginPath();
+    ctx.ellipse(8, 15, 4, 3, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(20, 15, 4, 3, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    // Détails épaulières
+    ctx.strokeStyle = rust;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(14, 9, 7.5, Math.PI * 1.2, Math.PI * 1.8);
+    ctx.arc(8, 15, 3, 0, Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(20, 15, 3, 0, Math.PI);
     ctx.stroke();
 
-    // Torse - armure à plaques
+    // Torse - armure à plaques lourde
     ctx.fillStyle = armorDark;
-    ctx.fillRect(10, 15, 8, 10);
+    ctx.fillRect(9, 15, 10, 12);
 
-    ctx.fillStyle = armor;
-    ctx.fillRect(11, 16, 6, 8);
+    ctx.fillStyle = armorMid;
+    ctx.fillRect(10, 16, 8, 10);
 
-    // Ligne centrale armure
+    // Détails plaques
     ctx.strokeStyle = armorLight;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(14, 16);
-    ctx.lineTo(14, 24);
+    ctx.lineTo(14, 26);
+    ctx.stroke();
+    ctx.strokeStyle = rust;
+    ctx.beginPath();
+    ctx.moveTo(10, 20);
+    ctx.lineTo(18, 20);
     ctx.stroke();
 
-    // Bouclier (petit, sur le côté)
-    ctx.fillStyle = metal;
+    // Grande épée sur l'épaule
+    ctx.fillStyle = '#444444';
+    ctx.fillRect(21, 8, 3, 20);
+    ctx.fillStyle = armorLight;
+    ctx.fillRect(21, 6, 3, 3);
+    // Garde
+    ctx.fillStyle = rust;
+    ctx.fillRect(19, 9, 7, 2);
+
+    // Bouclier Grass Crest style
+    ctx.fillStyle = armorDark;
     ctx.beginPath();
-    ctx.ellipse(7, 20, 3, 4, 0, 0, Math.PI * 2);
+    ctx.ellipse(6, 20, 4, 5, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = armorDark;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Épée (sur l'autre côté)
-    ctx.strokeStyle = metal;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(21, 17);
-    ctx.lineTo(23, 23);
-    ctx.stroke();
-
-    // Garde épée
+    ctx.strokeStyle = '#3a5f3a';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(19, 18);
-    ctx.lineTo(25, 18);
+    ctx.arc(6, 20, 3, 0, Math.PI * 2);
     ctx.stroke();
 
     // Jambes blindées
     ctx.fillStyle = armorDark;
-    ctx.fillRect(11, 25, 3, 8);
-    ctx.fillRect(14, 25, 3, 8);
+    ctx.fillRect(10, 27, 4, 7);
+    ctx.fillRect(14, 27, 4, 7);
 
-    // Bottes
-    ctx.fillStyle = armor;
-    ctx.fillRect(10, 33, 4, 3);
-    ctx.fillRect(14, 33, 4, 3);
+    // Genouillères
+    ctx.fillStyle = armorMid;
+    ctx.beginPath();
+    ctx.ellipse(12, 28, 2.5, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(16, 28, 2.5, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bottes lourdes
+    ctx.fillStyle = armorDark;
+    ctx.fillRect(9, 33, 5, 3);
+    ctx.fillRect(14, 33, 5, 3);
   });
 }
 
 /**
- * Texture du Veilleur (Watcher) - Vert agile avec capuche
+ * Texture du Veilleur (Watcher) - Style Abyss Watcher Dark Souls 3
+ * Chapeau pointu, cape flottante, épée enflammée
  */
 export function ensureWatcherTexture(scene: Phaser.Scene): string {
   return ensureCanvasTexture(scene, 'tex_watcher', 28, 36, (ctx) => {
     ctx.clearRect(0,0,28,36);
 
-    // Couleurs veilleur
-    const cloak = '#3a5f3a'; // Vert forêt
-    const cloakDark = '#2a4f2a';
-    const leather = '#8b6f47'; // Cuir marron
-    const eye = '#90ee90'; // Vert lumineux
+    // Couleurs Abyss Watcher
+    const cloakDark = '#1a1a1a';
+    const cloak = '#2d2d2d';
+    const cloakHighlight = '#3a3a3a';
+    const leather = '#3d2d1d';
+    const flame = '#ff6600';
+    const flameCore = '#ffaa00';
+    const metal = '#6a6a6a';
 
-    // Capuche
-    ctx.fillStyle = cloak;
-    ctx.beginPath();
-    ctx.arc(14, 9, 8, 0, Math.PI * 2);
-    ctx.fill();
-
+    // Grande cape flottante (signature des Abyss Watchers)
     ctx.fillStyle = cloakDark;
     ctx.beginPath();
-    ctx.arc(14, 8, 7, 0, Math.PI);
+    ctx.moveTo(6, 12);
+    ctx.lineTo(2, 34);
+    ctx.lineTo(7, 36);
+    ctx.lineTo(10, 34);
+    ctx.lineTo(9, 14);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(22, 12);
+    ctx.lineTo(26, 34);
+    ctx.lineTo(21, 36);
+    ctx.lineTo(18, 34);
+    ctx.lineTo(19, 14);
+    ctx.fill();
+    // Détails déchirés
+    ctx.fillStyle = cloak;
+    ctx.beginPath();
+    ctx.moveTo(3, 32);
+    ctx.lineTo(5, 35);
+    ctx.lineTo(6, 32);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(22, 33);
+    ctx.lineTo(24, 36);
+    ctx.lineTo(25, 33);
+    ctx.fill();
+
+    // Chapeau pointu (signature)
+    ctx.fillStyle = cloak;
+    ctx.beginPath();
+    ctx.moveTo(14, 0);
+    ctx.lineTo(7, 11);
+    ctx.lineTo(21, 11);
+    ctx.closePath();
+    ctx.fill();
+    // Bord du chapeau
+    ctx.fillStyle = cloakHighlight;
+    ctx.beginPath();
+    ctx.ellipse(14, 11, 8, 2, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Visage dans l'ombre
-    ctx.fillStyle = 'rgba(20,20,20,0.95)';
+    ctx.fillStyle = 'rgba(10,10,10,0.98)';
     ctx.beginPath();
-    ctx.ellipse(14, 10, 5, 4, 0, 0, Math.PI * 2);
+    ctx.ellipse(14, 12, 5, 4, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Yeux brillants verts (signature du veilleur)
-    ctx.fillStyle = eye;
-    ctx.shadowColor = eye;
-    ctx.shadowBlur = 3;
+    // Yeux rouges perçants (corrompus par l'Abyss)
+    ctx.fillStyle = '#cc2222';
+    ctx.shadowColor = '#cc2222';
+    ctx.shadowBlur = 4;
     ctx.beginPath();
-    ctx.ellipse(12, 10, 1.5, 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(12, 12, 1.2, 1.8, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.ellipse(16, 10, 1.5, 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(16, 12, 1.2, 1.8, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    // Cape/manteau
-    ctx.fillStyle = cloak;
-    ctx.beginPath();
-    ctx.moveTo(9, 14);
-    ctx.lineTo(6, 28);
-    ctx.lineTo(9, 30);
-    ctx.lineTo(10, 15);
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.moveTo(19, 14);
-    ctx.lineTo(22, 28);
-    ctx.lineTo(19, 30);
-    ctx.lineTo(18, 15);
-    ctx.fill();
-
-    // Torse - armure légère en cuir
+    // Torse - armure légère style Legion
     ctx.fillStyle = leather;
-    ctx.fillRect(11, 15, 6, 9);
+    ctx.fillRect(10, 15, 8, 10);
 
-    // Sangles cuir
-    ctx.strokeStyle = cloakDark;
-    ctx.lineWidth = 1.5;
+    // Détails armure
+    ctx.strokeStyle = cloakHighlight;
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(11, 18);
-    ctx.lineTo(17, 18);
+    ctx.moveTo(14, 15);
+    ctx.lineTo(14, 25);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(11, 21);
-    ctx.lineTo(17, 21);
+    ctx.moveTo(10, 18);
+    ctx.lineTo(18, 18);
     ctx.stroke();
 
-    // Dagues croisées (dans le dos visible)
-    ctx.strokeStyle = '#b0b0b0';
-    ctx.lineWidth = 2;
+    // Épaulières légères
+    ctx.fillStyle = metal;
     ctx.beginPath();
-    ctx.moveTo(11, 17);
-    ctx.lineTo(9, 13);
-    ctx.stroke();
+    ctx.ellipse(9, 15, 2.5, 2, -0.4, 0, Math.PI * 2);
+    ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(17, 17);
-    ctx.lineTo(19, 13);
-    ctx.stroke();
+    ctx.ellipse(19, 15, 2.5, 2, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Épée enflammée Farron (signature)
+    ctx.fillStyle = metal;
+    ctx.fillRect(21, 10, 2, 16);
+    // Garde
+    ctx.fillRect(19, 12, 6, 2);
+    // Flammes sur la lame
+    ctx.fillStyle = flame;
+    ctx.shadowColor = flame;
+    ctx.shadowBlur = 5;
+    ctx.beginPath();
+    ctx.moveTo(22, 10);
+    ctx.quadraticCurveTo(24, 8, 23, 5);
+    ctx.quadraticCurveTo(22, 8, 22, 10);
+    ctx.fill();
+    ctx.fillStyle = flameCore;
+    ctx.beginPath();
+    ctx.moveTo(22, 12);
+    ctx.quadraticCurveTo(23, 9, 22.5, 7);
+    ctx.quadraticCurveTo(22, 10, 22, 12);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Dague dans l'autre main
+    ctx.fillStyle = metal;
+    ctx.beginPath();
+    ctx.moveTo(6, 18);
+    ctx.lineTo(4, 12);
+    ctx.lineTo(5, 12);
+    ctx.lineTo(7, 18);
+    ctx.fill();
 
     // Jambes
     ctx.fillStyle = cloakDark;
-    ctx.fillRect(11, 24, 3, 9);
-    ctx.fillRect(14, 24, 3, 9);
+    ctx.fillRect(10, 25, 4, 8);
+    ctx.fillRect(14, 25, 4, 8);
 
     // Bottes légères
     ctx.fillStyle = leather;
-    ctx.fillRect(10, 33, 4, 3);
-    ctx.fillRect(14, 33, 4, 3);
+    ctx.fillRect(9, 33, 5, 3);
+    ctx.fillRect(14, 33, 5, 3);
   });
 }
 
 /**
- * Texture de l'Arbalétrier (Arbalest) - Rouge/Marron avec arbalète
+ * Texture de l'Arbalétrier (Arbalest) - Style Silver Knight Archer Dark Souls
+ * Armure argentée élégante, grand arc, posture noble
  */
 export function ensureArbalestTexture(scene: Phaser.Scene): string {
   return ensureCanvasTexture(scene, 'tex_arbalest', 28, 36, (ctx) => {
     ctx.clearRect(0,0,28,36);
 
-    // Couleurs arbalétrier
-    const tunic = '#a04040'; // Rouge/brun
-    const tunicDark = '#804020';
-    const wood = '#6b4423'; // Bois arbalète
-    const metal = '#c0c0c0';
-    const leather = '#5a4a3a';
+    // Couleurs Silver Knight
+    const armorSilver = '#b8b8c8';
+    const armorLight = '#d8d8e8';
+    const armorDark = '#888898';
+    const capeDark = '#1a1a2a';
+    const cape = '#2a2a3a';
+    const gold = '#c9a227';
+    const bow = '#4a3a2a';
+    const bowLight = '#6a5a4a';
 
-    // Chapeau/casque léger
-    ctx.fillStyle = leather;
+    // Cape courte royale
+    ctx.fillStyle = capeDark;
     ctx.beginPath();
-    ctx.ellipse(14, 8, 7, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Bord du chapeau
-    ctx.fillStyle = tunicDark;
-    ctx.beginPath();
-    ctx.ellipse(14, 9, 8, 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Visage
-    ctx.fillStyle = '#f4d0a8';
-    ctx.beginPath();
-    ctx.ellipse(14, 11, 4.5, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Yeux concentrés (tireur d'élite)
-    ctx.fillStyle = '#2a2a2a';
-    ctx.beginPath();
-    ctx.ellipse(12, 11, 1, 1.5, 0, 0, Math.PI * 2);
+    ctx.moveTo(7, 14);
+    ctx.lineTo(4, 28);
+    ctx.lineTo(8, 30);
+    ctx.lineTo(10, 16);
     ctx.fill();
     ctx.beginPath();
-    ctx.ellipse(16, 11, 1, 1.5, 0, 0, Math.PI * 2);
+    ctx.moveTo(21, 14);
+    ctx.lineTo(24, 28);
+    ctx.lineTo(20, 30);
+    ctx.lineTo(18, 16);
     ctx.fill();
-
-    // Tunique
-    ctx.fillStyle = tunic;
+    // Bordure dorée
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(10, 15);
-    ctx.lineTo(10, 26);
-    ctx.lineTo(18, 26);
-    ctx.lineTo(18, 15);
+    ctx.moveTo(4, 28);
+    ctx.lineTo(8, 30);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(24, 28);
+    ctx.lineTo(20, 30);
+    ctx.stroke();
+
+    // Casque Silver Knight (élégant, pointu)
+    ctx.fillStyle = armorSilver;
+    ctx.beginPath();
+    ctx.ellipse(14, 9, 7, 6, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Ceinture
-    ctx.fillStyle = leather;
-    ctx.fillRect(10, 23, 8, 2);
+    // Crête du casque
+    ctx.fillStyle = armorLight;
+    ctx.beginPath();
+    ctx.moveTo(14, 1);
+    ctx.lineTo(11, 6);
+    ctx.lineTo(17, 6);
+    ctx.closePath();
+    ctx.fill();
 
-    // Détails tunique
-    ctx.strokeStyle = tunicDark;
+    // Visière fendue (style Silver Knight)
+    ctx.fillStyle = 'rgba(0,0,0,0.95)';
+    ctx.fillRect(10, 9, 8, 1.5);
+    ctx.fillRect(13, 8, 2, 4);
+
+    // Lueur bleue froide dans les yeux
+    ctx.fillStyle = '#6688cc';
+    ctx.shadowColor = '#6688cc';
+    ctx.shadowBlur = 3;
+    ctx.beginPath();
+    ctx.ellipse(12, 9.5, 0.8, 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(16, 9.5, 0.8, 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Détails dorés casque
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.arc(14, 9, 7, Math.PI * 1.2, Math.PI * 1.8);
+    ctx.stroke();
+
+    // Torse - armure Silver Knight élégante
+    ctx.fillStyle = armorDark;
+    ctx.fillRect(9, 14, 10, 12);
+
+    ctx.fillStyle = armorSilver;
+    ctx.fillRect(10, 15, 8, 10);
+
+    // Détails plaques
+    ctx.strokeStyle = armorLight;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(14, 15);
-    ctx.lineTo(14, 26);
+    ctx.lineTo(14, 25);
     ctx.stroke();
 
-    // ARBALÈTE (caractéristique principale)
-    // Corps de l'arbalète
-    ctx.fillStyle = wood;
-    ctx.fillRect(19, 18, 8, 3);
-
-    // Arc de l'arbalète
-    ctx.strokeStyle = wood;
-    ctx.lineWidth = 2.5;
+    // Symbole du soleil (Anor Londo)
+    ctx.fillStyle = gold;
     ctx.beginPath();
-    ctx.arc(23, 19.5, 5, -Math.PI * 0.4, Math.PI * 0.4);
+    ctx.arc(14, 19, 2, 0, Math.PI * 2);
+    ctx.fill();
+    // Rayons
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 0.8;
+    for (let i = 0; i < 8; i++) {
+      const angle = (i * Math.PI * 2) / 8;
+      ctx.beginPath();
+      ctx.moveTo(14 + Math.cos(angle) * 2.5, 19 + Math.sin(angle) * 2.5);
+      ctx.lineTo(14 + Math.cos(angle) * 4, 19 + Math.sin(angle) * 4);
+      ctx.stroke();
+    }
+
+    // Épaulières élégantes
+    ctx.fillStyle = armorSilver;
+    ctx.beginPath();
+    ctx.ellipse(8, 15, 3.5, 2.5, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(20, 15, 3.5, 2.5, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    // Bordure dorée
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.arc(8, 15, 3, 0, Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(20, 15, 3, 0, Math.PI);
     ctx.stroke();
 
+    // DRAGONSLAYER GREATBOW (grand arc)
+    ctx.fillStyle = bow;
+    ctx.fillRect(23, 4, 2, 26);
+    // Arc courbé
+    ctx.strokeStyle = bowLight;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(22, 17, 12, -Math.PI * 0.35, Math.PI * 0.35);
+    ctx.stroke();
     // Corde
-    ctx.strokeStyle = '#666666';
+    ctx.strokeStyle = '#aaaaaa';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(20, 16);
-    ctx.lineTo(20, 23);
+    ctx.moveTo(24, 6);
+    ctx.lineTo(24, 28);
     ctx.stroke();
-
-    // Mécanisme
-    ctx.fillStyle = metal;
-    ctx.fillRect(18, 19, 2, 2);
-
-    // Carreau (flèche)
-    ctx.strokeStyle = wood;
-    ctx.lineWidth = 1.5;
+    // Flèche énorme
+    ctx.fillStyle = bow;
+    ctx.fillRect(15, 16.5, 8, 1.5);
+    // Pointe de flèche
+    ctx.fillStyle = armorSilver;
     ctx.beginPath();
-    ctx.moveTo(15, 19.5);
-    ctx.lineTo(20, 19.5);
-    ctx.stroke();
-
-    // Pointe du carreau
-    ctx.fillStyle = metal;
+    ctx.moveTo(15, 17.25);
+    ctx.lineTo(12, 16);
+    ctx.lineTo(12, 18.5);
+    ctx.fill();
+    // Empennage
+    ctx.fillStyle = cape;
     ctx.beginPath();
-    ctx.moveTo(15, 19.5);
-    ctx.lineTo(13, 18.5);
-    ctx.lineTo(13, 20.5);
+    ctx.moveTo(23, 16);
+    ctx.lineTo(25, 15);
+    ctx.lineTo(25, 19);
+    ctx.lineTo(23, 18);
     ctx.fill();
 
     // Carquois sur le dos
-    ctx.fillStyle = leather;
-    ctx.fillRect(8, 16, 2, 8);
-    ctx.strokeStyle = tunicDark;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(9, 14);
-    ctx.lineTo(9, 16);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(7, 14);
-    ctx.lineTo(7, 16);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(11, 14);
-    ctx.lineTo(11, 16);
-    ctx.stroke();
+    ctx.fillStyle = armorDark;
+    ctx.fillRect(5, 14, 3, 10);
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(5, 14, 3, 10);
+    // Flèches visibles
+    ctx.fillStyle = bow;
+    ctx.fillRect(5.5, 10, 0.8, 5);
+    ctx.fillRect(6.5, 11, 0.8, 4);
+    ctx.fillRect(7.5, 10, 0.8, 5);
 
-    // Jambes
-    ctx.fillStyle = tunicDark;
-    ctx.fillRect(11, 26, 3, 7);
-    ctx.fillRect(14, 26, 3, 7);
+    // Jambes blindées
+    ctx.fillStyle = armorDark;
+    ctx.fillRect(10, 26, 4, 7);
+    ctx.fillRect(14, 26, 4, 7);
 
-    // Bottes
-    ctx.fillStyle = leather;
-    ctx.fillRect(10, 33, 4, 3);
-    ctx.fillRect(14, 33, 4, 3);
+    // Genouillères
+    ctx.fillStyle = armorSilver;
+    ctx.beginPath();
+    ctx.ellipse(12, 27, 2.5, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(16, 27, 2.5, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bottes élégantes
+    ctx.fillStyle = armorSilver;
+    ctx.fillRect(9, 33, 5, 3);
+    ctx.fillRect(14, 33, 5, 3);
   });
 }
 

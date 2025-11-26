@@ -1,4 +1,3 @@
-
 import Phaser from 'phaser';
 import { GameConstants } from '../scenes/GameConstants';
 import { PathfindingGrid } from '../scenes/PathfindingGrid';
@@ -11,7 +10,7 @@ type EnemyGO = Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
 export class BuildingManager {
     private scene: Phaser.Scene;
     private grid: PathfindingGrid;
-    private registry: Phaser.Registry.RegistryPlugin;
+    private registry: Phaser.Data.DataManager; // CORRECTION
     private factory: BuildingFactory;
     private enemies: Phaser.GameObjects.Group;
 
@@ -35,7 +34,7 @@ export class BuildingManager {
 
     private previewGhost?: Phaser.GameObjects.Rectangle;
     private previewRangeGfx?: Phaser.GameObjects.Graphics;
-    
+
     private sanctuaryPos!: { x: number; y: number };
 
     constructor(scene: Phaser.Scene, grid: PathfindingGrid, sanctuaryPos: {x: number, y: number}, enemies: Phaser.GameObjects.Group) {
@@ -50,8 +49,9 @@ export class BuildingManager {
         this.initializeCosts();
         this.initializePreview();
         this.registerInputHandlers();
-        
-        this.registry.events.on('changedata-buildKind', (parent: any, value: BuildingKind) => {
+
+        // CORRECTION: suppression de 'parent'
+        this.registry.events.on('changedata-buildKind', (_parent: any, value: BuildingKind) => {
             this.currentBuildKind = value;
         });
 
@@ -67,7 +67,7 @@ export class BuildingManager {
         this.storages = this.scene.physics.add.staticGroup();
         this.barracks = this.scene.physics.add.staticGroup();
     }
-    
+
     private initializeCosts(): void {
         this.towerCost = this.registry.get('towerCost') ?? GameConstants.INITIAL_TOWER_COST;
         this.wallCost = this.registry.get('wallCost') ?? GameConstants.INITIAL_WALL_COST;
@@ -92,7 +92,7 @@ export class BuildingManager {
         this.previewGhost = this.scene.add.rectangle(0, 0, 48, 48, 0x9f8d62, 0.28).setDepth(8).setVisible(false);
         this.previewRangeGfx = this.scene.add.graphics().setDepth(7).setVisible(false);
     }
-    
+
     private registerInputHandlers(): void {
         this.scene.input.on('pointerdown', this.handlePointerDown, this);
         this.scene.input.on('pointermove', this.updatePlacementPreview, this);
@@ -258,12 +258,12 @@ export class BuildingManager {
             });
         };
         return checkGroup(this.towers) ||
-               checkGroup(this.walls) ||
-               checkGroup(this.generators) ||
-               checkGroup(this.campfires) ||
-               checkGroup(this.forges) ||
-               checkGroup(this.storages) ||
-               checkGroup(this.barracks);
+            checkGroup(this.walls) ||
+            checkGroup(this.generators) ||
+            checkGroup(this.campfires) ||
+            checkGroup(this.forges) ||
+            checkGroup(this.storages) ||
+            checkGroup(this.barracks);
     }
 
     private isSanctuaryCell(x: number, y: number): boolean {
@@ -358,9 +358,9 @@ export class BuildingManager {
         }
         const refund = Math.floor(baseCost * GameConstants.SELL_REFUND_PERCENTAGE);
         this.addShards(refund);
-        
+
         if (group) group.remove(building, true, true);
-        
+
         if (type === 'wall') {
             this.recomputeGrid();
             this.scene.game.events.emit('grid-updated');
@@ -372,7 +372,7 @@ export class BuildingManager {
     public collectBuildingsData(): SavedBuilding[] {
         const buildings: SavedBuilding[] = [];
         if (!this.towers || !this.walls || !this.generators) return buildings;
-        
+
         const processGroup = (group: Phaser.GameObjects.Group | Phaser.Physics.Arcade.StaticGroup, type: BuildingKind) => {
             for (const obj of group.getChildren()) {
                 const building = obj as Phaser.GameObjects.Container;
@@ -403,10 +403,11 @@ export class BuildingManager {
         processGroup(this.forges, 'forge');
         processGroup(this.storages, 'storage');
         processGroup(this.barracks, 'barracks');
-        
+
         return buildings;
     }
 
+    // ... La méthode restoreBuildings (que nous avons corrigée précédemment) reste inchangée ...
     public restoreBuildings(buildings: SavedBuilding[]): void {
         for (const buildingData of buildings) {
             // 1. Recréation physique et visuelle
@@ -468,10 +469,6 @@ export class BuildingManager {
         this.registry.set('barracksCount', this.barracks.getLength());
     }
 
-    private createBuildingDirect(kind: BuildingKind, x: number, y: number): void {
-        this.createBuilding(kind, x, y);
-    }
-    
     public findBuildingAt(x: number, y: number): Phaser.GameObjects.Container | undefined {
         const allBuildings = [
             ...this.walls.getChildren(), ...this.towers.getChildren(), ...this.generators.getChildren(),
@@ -564,7 +561,7 @@ export class BuildingManager {
     }
 
     public destroy(): void {
-        this.registry.events.off('changedata-buildKind', this.currentBuildKind);
+        this.registry.events.off('changedata-buildKind');
         this.scene.input.off('pointerdown', this.handlePointerDown, this);
         this.scene.input.off('pointermove', this.updatePlacementPreview, this);
         this.scene.input.off('gameout');

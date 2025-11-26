@@ -3,11 +3,11 @@ import Phaser from 'phaser';
 
 export class HUDManager {
     private scene: Phaser.Scene;
-    private registry: Phaser.Registry.RegistryPlugin;
+    private registry: Phaser.Data.DataManager;
 
     private shardsText!: Phaser.GameObjects.Text;
     private productionText!: Phaser.GameObjects.Text;
-    private hpText!: Phaser.GameObjects.Text;
+
     private hpBar!: Phaser.GameObjects.Graphics;
     private hpBarLabel!: Phaser.GameObjects.Text;
     private waveText!: Phaser.GameObjects.Text;
@@ -68,7 +68,7 @@ export class HUDManager {
 
         this.drawHeart(hpPanelX + 18, hpPanelY + 20, 10, this.theme.hpColor).setScrollFactor(0).setDepth(1);
 
-        this.hpText = this.scene.add.text(hpPanelX + 35, hpPanelY + 10, 'Feu-lien', {
+        this.scene.add.text(hpPanelX + 35, hpPanelY + 10, 'Feu-lien', {
             ...this.txtStyle(16), color: '#ff6b6b', fontStyle: 'bold'
         }).setScrollFactor(0).setDepth(1);
 
@@ -191,5 +191,17 @@ export class HUDManager {
         g.fillCircle(x + s * 0.4, y - s * 0.2, r);
         g.fillTriangle(x - s, y, x + s, y, x, y + s);
         return g;
+    }
+
+    public destroy(): void {
+        this.registry.events.off('changedata-soulShards');
+        this.registry.events.off('changedata-maxSoulShards');
+        this.registry.events.off('changedata-totalSoulProduction', this.updateProductionText, this);
+        this.registry.events.off('changedata-generatorCount', this.updateProductionText, this);
+        this.registry.events.off('changedata-sanctuaryHP');
+        this.registry.events.off('changedata-wave');
+        this.registry.events.off('changedata-waveRemaining', this.updateWaveProgressBar, this);
+        this.registry.events.off('changedata-waveTotal', this.updateWaveProgressBar, this);
+        this.registry.events.off('changedata-waveActive', this.updateWaveProgressBar, this);
     }
 }

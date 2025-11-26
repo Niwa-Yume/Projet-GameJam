@@ -15,7 +15,7 @@ export class EnemyManager {
     private enemySpeed: number;
     private factory: EnemyFactory;
 
-    constructor(scene: Phaser.Scene, buildingManager: BuildingManager, enemiesGroup: Phaser.Physics.Arcade.Group, bulletsGroup: Phaser.Physics.Arcade.Group, sanctuaryPos: { x: number; y: number }, initialSpeed: number) {
+    constructor(scene: Phaser.Scene, buildingManager: BuildingManager, enemiesGroup: Phaser.Physics.Arcade.Group, _bulletsGroup: Phaser.Physics.Arcade.Group, sanctuaryPos: { x: number; y: number }, initialSpeed: number) {
         this.scene = scene;
         this.buildingManager = buildingManager;
         this.enemies = enemiesGroup;
@@ -27,7 +27,7 @@ export class EnemyManager {
     public update(dt: number): void {
         const eList = this.enemies.getChildren() as EnemyGO[];
         for (const enemy of eList) {
-            let target = enemy.getData('target') as Phaser.GameObjects.Rectangle | undefined;
+            let target = enemy.getData('target') as Phaser.GameObjects.Container | undefined;
 
             if (!target || !target.active) {
                 target = this.buildingManager.findBuildingAt(enemy.x, enemy.y);
@@ -188,5 +188,9 @@ export class EnemyManager {
 
     public getEnemies(): Phaser.Physics.Arcade.Group {
         return this.enemies;
+    }
+
+    public destroy(): void {
+        // Cleanup if needed
     }
 }

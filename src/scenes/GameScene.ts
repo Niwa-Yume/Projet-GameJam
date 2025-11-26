@@ -87,7 +87,7 @@ export class GameScene extends Phaser.Scene {
         this.physics.add.collider(this.enemies, this.buildingManager.barracks);
 
         // Overlap entre les balles et les ennemis
-        this.physics.add.overlap(this.bullets, this.enemies, this.onBulletHitEnemy, undefined, this);
+        this.physics.add.overlap(this.bullets, this.enemies, (bullet, enemy) => this.onBulletHitEnemy(bullet as Phaser.Types.Physics.Arcade.GameObjectWithBody, enemy as Phaser.Types.Physics.Arcade.GameObjectWithBody), undefined, this);
 
         this.startAutoSave();
         this.registerGameEvents();
@@ -95,7 +95,7 @@ export class GameScene extends Phaser.Scene {
         if (saveData?.buildings?.length) this.buildingManager.restoreBuildings(saveData.buildings);
         if (saveData?.allies?.length) this.allyManager.restoreAllies(saveData.allies);
 
-        if (this.registry.get('autoWaveMode') && offlineProgress?.wavesCompleted >= 0) {
+        if (this.registry.get('autoWaveMode') && (offlineProgress?.wavesCompleted ?? 0) >= 0) {
             this.registry.set('nextWaveIn', 3);
             this.time.delayedCall(3000, () => this.game.events.emit('start-wave'));
         }
@@ -167,26 +167,22 @@ export class GameScene extends Phaser.Scene {
         });
     }
 
-    private onBulletHitEnemy(bullet: Phaser.GameObjects.GameObject, enemy: Phaser.GameObjects.GameObject): void {
-        // 1. D'abord, on récupère les infos (Type de balle et Composant PV de l'ennemi)
+    private onBulletHitEnemy(bulletObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile, enemyObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile): void {
+        const bullet = bulletObj as Phaser.GameObjects.GameObject;
+        const enemy = enemyObj as Phaser.GameObjects.GameObject;
+        
         const bulletType = bullet.getData('type');
         const health = enemy.getData('health') as HealthComponent;
 
-        // DEBUG : On vérifie si la collision est bien détectée par le moteur physique
-        // Si tu ne vois pas ce message, c'est que les Hitbox ne se touchent pas !
-        console.log(`💥 IMPACT ! Balle (${bulletType}) touche Ennemi (${enemy.name})`);
+        console.log(`IMPACT ! Balle (${bulletType}) touche Ennemi (${enemy.name})`);
 
         if (health) {
-            // 2. On calcule les dégâts
             const damage = (bulletType === 'tower') ? GameConstants.TOWER_DMG : GameConstants.ALLY_DMG;
-
-            // 3. On applique les dégâts
             health.takeDamage(damage);
         } else {
-            console.warn(`⚠️ L'ennemi ${enemy.name} n'a pas de HealthComponent !`);
+            console.warn(`L'ennemi ${enemy.name} n'a pas de HealthComponent !`);
         }
 
-        // 4. À LA FIN, on détruit la balle
         bullet.destroy();
     }
 
@@ -264,8 +260,7 @@ export class GameScene extends Phaser.Scene {
         (bullet.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
         
         // Set the type data
-        bullet.setData('type', data.type); 
-        console.log(`fireBullet: Bullet ID: ${bullet.id}, Type: ${bullet.getData('type')}`); // Debug log
+        bullet.setData('type', data.type);
         
         const body = bullet.body as Phaser.Physics.Arcade.Body;
         const len = Math.hypot(data.target.x - data.x, data.target.y - data.y) || 1;

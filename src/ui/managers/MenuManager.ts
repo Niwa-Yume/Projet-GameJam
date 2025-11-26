@@ -7,7 +7,7 @@ type BuildingKind = 'tower' | 'wall' | 'generator' | 'campfire' | 'forge' | 'sto
 
 export class MenuManager {
     private scene: Phaser.Scene;
-    private registry: Phaser.Registry.RegistryPlugin;
+    private registry: Phaser.Data.DataManager;
 
     private btnTower!: Button;
     private btnWall!: Button;
@@ -28,8 +28,6 @@ export class MenuManager {
     private waveButton!: Button;
 
     private upgradeMenuContainer?: Phaser.GameObjects.Container;
-    private currentUpgradeBuilding?: Phaser.GameObjects.Rectangle;
-    private currentUpgradeType?: BuildingKind;
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
@@ -163,7 +161,7 @@ export class MenuManager {
         if (game?.allyManager) game.allyManager.recruitUnit(kind);
     }
 
-    private showUpgradeMenuForBuilding(building: Phaser.GameObjects.Container, type: BuildingKind): void {
+    private showUpgradeMenuForBuilding(_building: Phaser.GameObjects.Container, _type: BuildingKind): void {
         // ... (implementation unchanged)
     }
 

@@ -5,7 +5,7 @@ import { BuildingManager } from './BuildingManager';
 
 export class EconomyManager {
     private scene: Phaser.Scene;
-    private registry: Phaser.Registry.RegistryPlugin;
+    private registry: Phaser.Data.DataManager;
     private buildingManager: BuildingManager;
 
     private soulProductionRate: number = 0.5;
@@ -82,5 +82,11 @@ export class EconomyManager {
     public increaseSoulProductionRate(delta: number): void {
         this.soulProductionRate += delta;
         this.registry.set('soulProductionRate', this.soulProductionRate);
+    }
+
+    public destroy(): void {
+        this.scene.game.events.off('enemy-killed', this.onEnemyKilled, this);
+        this.scene.game.events.off('generator-changed', this.updateSoulProductionDisplay, this);
+        if (this.passiveSoulTimer) this.passiveSoulTimer.remove(false);
     }
 }
