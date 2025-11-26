@@ -26,8 +26,11 @@ export class MenuManager {
     private arbalestCost = GameConstants.UNIT_DEFS.arbalest.cost;
 
     private waveButton!: Button;
+    private tutoButton!: Button;
 
     private upgradeMenuContainer?: Phaser.GameObjects.Container;
+    private videoPopup?: Phaser.GameObjects.Container;
+    private videoElement?: Phaser.GameObjects.DOMElement;
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
@@ -62,6 +65,11 @@ export class MenuManager {
         this.btnStorage = makeBtn('6 Réserve', 'storage');
         this.btnBarracks = makeBtn('7 Caserne', 'barracks');
 
+        // Create Tuto Button right after Barracks button, and it's always enabled
+        this.tutoButton = new Button(this.scene, M + 110, by + BTN_H/2, 200, BTN_H, 'Tutoriel', {}, () => {
+            this.showVideoPopup();
+        });
+
         const initialKind = (this.registry.get('buildKind') as BuildingKind) ?? 'tower';
         this.selectKind(initialKind, true); // Initial selection without emitting event
     }
@@ -88,6 +96,57 @@ export class MenuManager {
         this.waveButton = new Button(this.scene, rightPanelX + 65, waveHeaderY + 60, 110, 28, 'Lancer Vague', {}, () => {
             this.scene.game.events.emit('start-wave');
         });
+    }
+
+    private showVideoPopup(): void {
+        if (this.videoPopup) return;
+
+        const centerX = this.scene.cameras.main.width / 2;
+        const centerY = this.scene.cameras.main.height / 2;
+
+        this.videoPopup = this.scene.add.container(centerX, centerY).setDepth(1000).setScrollFactor(0);
+
+        const overlay = this.scene.add.rectangle(0, 0, this.scene.cameras.main.width * 2, this.scene.cameras.main.height * 2, 0x000000, 0.8)
+            .setInteractive()
+            .on('pointerdown', () => this.closeVideoPopup());
+        
+        const popupBg = this.scene.add.rectangle(0, 0, 680, 440, 0x1a1816, 0.98)
+            .setStrokeStyle(3, 0xd4af37, 1);
+
+        const title = this.scene.add.text(0, -195, 'TUTORIEL', {
+            fontFamily: 'Cinzel, serif',
+            fontSize: '22px',
+            color: '#d4af37',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        const videoHtml = `
+            <video id="tuto-video" width="640" height="360" controls style="border-radius: 4px; background: #000;">
+                <source src="tuto.mp4" type="video/mp4">
+                Votre navigateur ne supporte pas la vidéo.
+            </video>
+        `;
+        
+        this.videoElement = this.scene.add.dom(0, 20).createFromHTML(videoHtml).setScrollFactor(0);
+
+        const closeBtn = new Button(this.scene, 0, 200, 120, 32, 'Fermer', {}, () => this.closeVideoPopup());
+        closeBtn.setScrollFactor(0);
+
+        this.videoPopup.add([overlay, popupBg, title, this.videoElement, closeBtn]);
+    }
+
+    private closeVideoPopup(): void {
+        if (!this.videoPopup) return;
+
+        const video = document.getElementById('tuto-video') as HTMLVideoElement;
+        if (video) {
+            video.pause();
+            video.currentTime = 0;
+        }
+
+        this.videoPopup.destroy();
+        this.videoPopup = undefined;
+        this.videoElement = undefined;
     }
 
     private registerListeners(): void {
@@ -123,8 +182,6 @@ export class MenuManager {
         const shards = (this.registry.get('soulShards') as number) ?? 0;
         const barracks = (this.registry.get('barracksCount') as number) ?? 0;
 
-        console.log(`MenuManager: updateRecruitUI - Shards: ${shards}, Barracks Count: ${barracks}`);
-
         const canRecruitKnight = barracks > 0 && shards >= this.knightCost;
         const canRecruitWatcher = barracks > 0 && shards >= this.watcherCost;
         const canRecruitArbalest = barracks > 0 && shards >= this.arbalestCost;
@@ -132,10 +189,6 @@ export class MenuManager {
         this.recruitKnight.setEnabled(canRecruitKnight);
         this.recruitWatcher.setEnabled(canRecruitWatcher);
         this.recruitArbalest.setEnabled(canRecruitArbalest);
-
-        console.log(`MenuManager: Knight enabled: ${canRecruitKnight} (Cost: ${this.knightCost})`);
-        console.log(`MenuManager: Watcher enabled: ${canRecruitWatcher} (Cost: ${this.watcherCost})`);
-        console.log(`MenuManager: Arbalest enabled: ${canRecruitArbalest} (Cost: ${this.arbalestCost})`);
     }
 
     private updateWaveButton(): void {
@@ -186,8 +239,12 @@ export class MenuManager {
         this.recruitWatcher?.destroy();
         this.recruitArbalest?.destroy();
         this.waveButton?.destroy();
+        this.tutoButton?.destroy();
 
         // Destroy upgrade menu container if it exists
         this.upgradeMenuContainer?.destroy();
+        
+        // Close video popup if open
+        this.closeVideoPopup();
     }
 }

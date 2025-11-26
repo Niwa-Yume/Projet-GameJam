@@ -47,26 +47,33 @@ export class Button extends Phaser.GameObjects.Container {
         scene.add.existing(this);
 
         this.bg.on('pointerdown', () => {
-            if (!this.active || !this.bg.scene) return; // Add check for active and scene
+            if (!this.active || !this.bg.scene) return;
             this.bg.setFillStyle(this.style.fillActive);
             onClick();
         });
+
         this.bg.on('pointerup', () => {
-            if (!this.active || !this.bg.scene) return; // Add check for active and scene
-            this.updateState();
+            if (!this.active || !this.bg.scene) return;
+            this.updateState(this.bg.input.pointerOver);
         });
+
         this.bg.on('pointerover', () => {
-            if (!this.active || !this.bg.scene) return; // Add check for active and scene
+            if (!this.active || !this.bg.scene) return;
             this.updateState(true);
         });
+
         this.bg.on('pointerout', () => {
-            if (!this.active || !this.bg.scene) return; // Add check for active and scene
-            this.updateState();
+            if (!this.active || !this.bg.scene) return;
+            this.updateState(false);
         });
     }
 
     private updateState(isOver: boolean = false): void {
-        if (!this.active || !this.bg.scene) return; // Add check for active and scene
+        if (!this.active || !this.bg.scene || !this.bg.input?.enabled) {
+            return;
+        }
+
+        this.txt.setAlpha(1.0);
         if (this.selected) {
             this.bg.setFillStyle(this.style.fillHover).setStrokeStyle(1, this.style.strokeHover);
             this.txt.setColor('#ffffff');
@@ -77,26 +84,26 @@ export class Button extends Phaser.GameObjects.Container {
     }
 
     public setText(text: string): void {
-        if (!this.active || !this.txt.scene) return; // Add check for active and scene
+        if (!this.active || !this.txt.scene) return;
         this.txt.setText(text);
     }
 
     public setEnabled(enabled: boolean): void {
-        if (!this.active || !this.bg.scene) return; // Add check for active and scene
+        if (!this.active || !this.bg.input) return;
+        
+        this.bg.input.enabled = enabled;
+
         if (enabled) {
-            this.bg.setInteractive({ useHandCursor: true });
-            this.updateState();
-            this.txt.setAlpha(1);
+            this.updateState(this.bg.input.pointerOver);
         } else {
-            this.bg.disableInteractive();
-            this.bg.setFillStyle(0x1b1b1b, 0.7);
+            this.bg.setFillStyle(0x1b1b1b, 0.7).setStrokeStyle(1, 0x444, 0.7);
             this.txt.setAlpha(0.6);
         }
     }
 
     public setSelected(selected: boolean): void {
-        if (!this.active || !this.bg.scene) return; // Add check for active and scene
+        if (!this.active) return;
         this.selected = selected;
-        this.updateState();
+        this.updateState(this.bg.input?.pointerOver ?? false);
     }
 }

@@ -52,16 +52,20 @@ export class BuildingFactory {
                 glow.clear().fillStyle(0xff6633, 0.3 + (Math.sin(time * 2) * 0.5 + 0.5) * 0.2).fillCircle(0, -16, 14);
             }
         });
-        const banner = this.scene.add.graphics().setVisible(false);
-        towerContainer.add([shadow, base, towerBody, battlements, embrasure, brazier, soulFlame, glow, banner, tower]);
+
+        towerContainer.add([shadow, base, towerBody, battlements, embrasure, brazier, soulFlame, glow, tower]);
         new HealthComponent(towerContainer, 100);
-        towerContainer.setData({ interactiveChild: tower, fireTimer, glow, banner });
+        towerContainer.setData({ interactiveChild: tower, fireTimer, glow });
         attachHealthBar(this.scene, towerContainer);
         const rangeGfx = this.scene.add.graphics().setDepth(9).setVisible(false);
         tower.on('pointerover', () => { rangeGfx.clear().lineStyle(1, 0x6b8fa5, 0.85).strokeCircle(x, y, GameConstants.TOWER_RANGE).setVisible(true); });
         tower.on('pointerout', () => rangeGfx.setVisible(false));
         tower.on('pointerdown', (p: Phaser.Input.Pointer) => { if (!p.rightButtonDown()) buildingManager.showUpgradeMenu(towerContainer, 'tower'); });
-        towerContainer.once(Phaser.GameObjects.Events.DESTROY, () => { rangeGfx.destroy(); fireTimer.remove(); });
+
+        towerContainer.once(Phaser.GameObjects.Events.DESTROY, () => {
+            rangeGfx.destroy();
+            fireTimer.remove();
+        });
 
         return towerContainer;
     }
