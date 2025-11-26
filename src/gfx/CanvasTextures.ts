@@ -72,6 +72,44 @@ export function ensureSkeletonTexture(scene: Phaser.Scene): string {
   });
 }
 
+export function ensureBossSkeletonTexture(scene: Phaser.Scene): string {
+  return ensureCanvasTexture(scene, 'tex_boss_skeleton', 42, 54, (ctx) => {
+    ctx.clearRect(0,0,42,54);
+    const bone = '#f0e8d8';
+    const shade = 'rgba(0,0,0,0.9)';
+    const armor = '#5a4a3a';
+    const armorShade = '#3a2a1a';
+
+    // Helmet
+    ctx.fillStyle = armor;
+    ctx.beginPath(); ctx.ellipse(21, 13, 11, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = armorShade;
+    ctx.fillRect(14, 12, 14, 3);
+
+    // Skull
+    ctx.fillStyle = bone;
+    ctx.beginPath(); ctx.ellipse(21, 14, 9, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = shade;
+    ctx.beginPath(); ctx.ellipse(17, 14, 2.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(25, 14, 2.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+
+    // Body
+    ctx.strokeStyle = bone; ctx.lineWidth = 3;
+    for (let i = 0; i < 5; i++) {
+      const y = 24 + i * 4;
+      ctx.beginPath(); ctx.moveTo(15, y); ctx.lineTo(27, y); ctx.stroke();
+    }
+    ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(21, 24); ctx.lineTo(21, 40); ctx.stroke();
+    ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(18, 42); ctx.lineTo(24, 42); ctx.stroke();
+
+    // Limbs
+    ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(14, 28); ctx.lineTo(8, 34); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(28, 28); ctx.lineTo(34, 34); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(17, 44); ctx.lineTo(14, 50); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(25, 44); ctx.lineTo(28, 50); ctx.stroke();
+  });
+}
+
 /**
  * Texture du Chevalier (Knight) - Bleu armure lourde
  */
@@ -392,3 +430,10 @@ export function ensureArbalestTexture(scene: Phaser.Scene): string {
   });
 }
 
+export function ensureRectangleTexture(scene: Phaser.Scene, key: string, width: number, height: number, color: number): string {
+  return ensureCanvasTexture(scene, key, width, height, (ctx) => {
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
+    ctx.fillRect(0, 0, width, height);
+  });
+}

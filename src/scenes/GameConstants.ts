@@ -14,6 +14,7 @@ export class GameConstants {
   // ========== ENNEMIS ==========
   static readonly ENEMY_SPEED = 80;
   static readonly ENEMY_DPS = 30; // Dégâts par seconde infligés aux bâtiments
+  static readonly ENEMY_HP = 30; // Points de vie de base d'un ennemi
   static readonly ATTACK_RANGE = 48; // Rayon pour contact avec bâtiment 48x48
   static readonly SHARD_REWARD = 5; // Récompense par kill
 
@@ -28,7 +29,11 @@ export class GameConstants {
   // ========== TOURS ==========
   static readonly TOWER_RANGE = 160; // Portée en pixels
   static readonly TOWER_FIRE_RATE = 500; // ms entre deux tirs
+  static readonly TOWER_DMG = 20; // Dégâts infligés par une tour
   static readonly BULLET_SPEED = 300; // pixels/s
+
+  // ========== ALLIÉS ==========
+  static readonly ALLY_DMG = 15; // Dégâts infligés par un allié (à ajuster si les alliés ont des dégâts différents)
 
   // ========== GÉNÉRATEURS ==========
   static readonly GENERATOR_TICK_MS = 2000; // Production toutes les 2s
@@ -91,4 +96,3 @@ export class GameConstants {
   // ========== SAUVEGARDE ==========
   static readonly AUTO_SAVE_INTERVAL_MS = 30000; // 30 secondes
 }
-

@@ -67,7 +67,11 @@ export class SaveManager {
   static load(): GameSaveData | null {
     try {
       const saveString = localStorage.getItem(this.SAVE_KEY);
-      if (!saveString) return null;
+      console.log(`SaveManager: Tentative de chargement. saveString: ${saveString ? saveString.substring(0, 100) + '...' : 'null'}`); // Log the raw save string
+      if (!saveString) {
+        console.log('SaveManager: Aucune sauvegarde trouvée dans localStorage.');
+        return null;
+      }
 
       const saveData = JSON.parse(saveString) as GameSaveData;
 

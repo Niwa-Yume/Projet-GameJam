@@ -86,9 +86,9 @@ export class GameState {
       storageCount: 0,
       barracksCount: 0,
 
-      towerCost: 25,
-      wallCost: 5,
-      generatorCost: 40,
+      towerCost: 20,
+      wallCost: 10,
+      generatorCost: 30,
       campfireCost: 35,
       forgeCost: 60,
       storageCost: 45,
