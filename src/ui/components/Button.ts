@@ -17,6 +17,8 @@ export class Button extends Phaser.GameObjects.Container {
     private txt: Phaser.GameObjects.Text;
     private style: ButtonStyle;
     private selected: boolean = false;
+    private isEnabled: boolean = true;
+    private isHovered: boolean = false; // Internal state for hover
 
     constructor(scene: Phaser.Scene, x: number, y: number, width: number, height: number, text: string, style: Partial<ButtonStyle> = {}, onClick: () => void) {
         super(scene, x, y);
@@ -47,29 +49,35 @@ export class Button extends Phaser.GameObjects.Container {
         scene.add.existing(this);
 
         this.bg.on('pointerdown', () => {
-            if (!this.active || !this.bg.scene) return;
+            if (!this.isEnabled || !this.active || !this.bg.scene) return;
             this.bg.setFillStyle(this.style.fillActive);
             onClick();
         });
 
         this.bg.on('pointerup', () => {
-            if (!this.active || !this.bg.scene) return;
-            this.updateState(this.bg.input.pointerOver);
+            if (!this.isEnabled || !this.active || !this.bg.scene) return;
+            this.updateState();
         });
 
         this.bg.on('pointerover', () => {
-            if (!this.active || !this.bg.scene) return;
-            this.updateState(true);
+            if (!this.isEnabled || !this.active || !this.bg.scene) return;
+            this.isHovered = true;
+            this.updateState();
         });
 
         this.bg.on('pointerout', () => {
             if (!this.active || !this.bg.scene) return;
-            this.updateState(false);
+            this.isHovered = false;
+            this.updateState();
         });
     }
 
-    private updateState(isOver: boolean = false): void {
-        if (!this.active || !this.bg.scene || !this.bg.input?.enabled) {
+    private updateState(): void {
+        if (!this.active || !this.bg.scene) return;
+
+        if (!this.isEnabled) {
+            this.bg.setFillStyle(0x1b1b1b, 0.7).setStrokeStyle(1, 0x444, 0.7);
+            this.txt.setAlpha(0.6);
             return;
         }
 
@@ -78,7 +86,7 @@ export class Button extends Phaser.GameObjects.Container {
             this.bg.setFillStyle(this.style.fillHover).setStrokeStyle(1, this.style.strokeHover);
             this.txt.setColor('#ffffff');
         } else {
-            this.bg.setFillStyle(isOver ? this.style.fillHover : this.style.fill).setStrokeStyle(1, isOver ? this.style.strokeHover : this.style.stroke);
+            this.bg.setFillStyle(this.isHovered ? this.style.fillHover : this.style.fill).setStrokeStyle(1, this.isHovered ? this.style.strokeHover : this.style.stroke);
             this.txt.setColor(this.style.text);
         }
     }
@@ -89,21 +97,14 @@ export class Button extends Phaser.GameObjects.Container {
     }
 
     public setEnabled(enabled: boolean): void {
-        if (!this.active || !this.bg.input) return;
-        
-        this.bg.input.enabled = enabled;
-
-        if (enabled) {
-            this.updateState(this.bg.input.pointerOver);
-        } else {
-            this.bg.setFillStyle(0x1b1b1b, 0.7).setStrokeStyle(1, 0x444, 0.7);
-            this.txt.setAlpha(0.6);
-        }
+        if (!this.active) return;
+        this.isEnabled = enabled;
+        this.updateState();
     }
 
     public setSelected(selected: boolean): void {
         if (!this.active) return;
         this.selected = selected;
-        this.updateState(this.bg.input?.pointerOver ?? false);
+        this.updateState();
     }
 }
