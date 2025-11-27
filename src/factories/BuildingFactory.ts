@@ -1,4 +1,3 @@
-
 import Phaser from 'phaser';
 import { GameConstants } from '../scenes/GameConstants';
 import { attachHealthBar } from '../ui/HealthBar';
@@ -26,6 +25,7 @@ export class BuildingFactory {
     }
 
     private createTower(x: number, y: number, buildingManager: any): Phaser.GameObjects.Container {
+        // ... existing code ...
         const towerContainer = this.scene.add.container(x, y).setDepth(10);
         this.scene.physics.add.existing(towerContainer, true); // Add static physics body
         const tower = this.scene.add.rectangle(0, 0, 48, 48, 0, 0).setInteractive({ useHandCursor: true });
@@ -71,6 +71,7 @@ export class BuildingFactory {
     }
 
     private createWall(x: number, y: number, buildingManager: any): Phaser.GameObjects.Container {
+        // ... existing code ...
         const wallContainer = this.scene.add.container(x, y).setDepth(9);
         this.scene.physics.add.existing(wallContainer, true); // Add static physics body
         const wall = this.scene.add.rectangle(0, 0, 48, 48, 0, 0).setInteractive({ useHandCursor: true });
@@ -86,6 +87,7 @@ export class BuildingFactory {
     }
 
     private createGenerator(x: number, y: number, buildingManager: any): Phaser.GameObjects.Container {
+        // ... existing code ...
         const genContainer = this.scene.add.container(x, y).setDepth(9);
         this.scene.physics.add.existing(genContainer, true); // Add static physics body
         const gen = this.scene.add.rectangle(0, 0, 48, 48, 0, 0).setInteractive({ useHandCursor: true });
@@ -169,65 +171,294 @@ export class BuildingFactory {
 
         return genContainer;
     }
+
     private createCampfire(x: number, y: number, buildingManager: any): Phaser.GameObjects.Container {
         const fireContainer = this.scene.add.container(x, y).setDepth(9);
-        this.scene.physics.add.existing(fireContainer, true); // Add static physics body
-        const fire = this.scene.add.rectangle(0, 0, 48, 48, 0, 0).setInteractive({ useHandCursor: true });
-        const ashCircle = this.scene.add.graphics().fillStyle(0x1a1510, 1).fillEllipse(0, 22, 42, 14);
-        const embers = this.scene.add.graphics().fillStyle(0xff4422, 0.8).fillCircle(-10, 19, 2);
-        const wood = this.scene.add.graphics().fillStyle(0x1a1510, 1).fillRect(-18, 12, 16, 5);
-        const sword = this.scene.add.graphics().fillStyle(0x5a6a7a, 1).beginPath().moveTo(0, -36).lineTo(-2.5, -28).lineTo(-2, 2).lineTo(2, 2).lineTo(2.5, -28).closePath().fillPath();
-        const flames = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-        fireContainer.add([ashCircle, embers, wood, sword, flames, fire]);
+        this.scene.physics.add.existing(fireContainer, true);
+
+        // Zone interactive (invisible)
+        const hitArea = this.scene.add.rectangle(0, 0, 48, 48, 0, 0).setInteractive({ useHandCursor: true });
+
+        const graphics = this.scene.add.graphics();
+
+        // 1. Socle (Cendres et Os)
+        graphics.fillStyle(0x000000, 0.5);
+        graphics.fillEllipse(0, 15, 40, 15); // Ombre
+        graphics.fillStyle(0x202020, 1);
+        graphics.fillCircle(0, 10, 20); // Cendres
+
+        // Os décoratifs
+        graphics.fillStyle(0xdddddd, 1);
+        graphics.save();
+        graphics.translateCanvas(0, 10);
+        graphics.rotateCanvas(0.5);
+        graphics.fillRect(-10, -2, 20, 4);
+        graphics.restore();
+        graphics.save();
+        graphics.translateCanvas(0, 10);
+        graphics.rotateCanvas(-0.8);
+        graphics.fillRect(-8, -2, 16, 3);
+        graphics.restore();
+
+        // 2. Épée Torsadée (Coiled Sword)
+        graphics.fillStyle(0x555555, 1);
+        graphics.beginPath();
+        graphics.moveTo(-2, -30);
+        graphics.lineTo(3, -25);
+        graphics.lineTo(1, -15);
+        graphics.lineTo(4, -5);
+        graphics.lineTo(2, 5);
+        graphics.lineTo(-2, 5);
+        graphics.lineTo(-3, -10);
+        graphics.lineTo(-1, -20);
+        graphics.closePath();
+        graphics.fillPath();
+
+        // Garde
+        graphics.lineStyle(2, 0x333333);
+        graphics.moveTo(-8, -8);
+        graphics.lineTo(8, -6);
+        graphics.strokePath();
+
+        // 3. Feu et Lumière
+        const fireCore = this.scene.add.circle(0, 5, 8, 0xffaa00, 0.8).setBlendMode(Phaser.BlendModes.ADD);
+        const light = this.scene.add.circle(0, 0, 40, 0xff6600, 0.2).setBlendMode(Phaser.BlendModes.SCREEN);
+        const particles = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+
+        fireContainer.add([graphics, light, fireCore, particles, hitArea]);
+
+        // Animations (Pulsation et Particules)
+        const pulseTween = this.scene.tweens.add({
+            targets: [fireCore, light],
+            scaleX: 1.1,
+            scaleY: 1.2,
+            alpha: 0.6,
+            duration: 1000 + Math.random() * 500,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        const particleTween = this.scene.tweens.addCounter({
+            from: 0,
+            to: 100,
+            duration: 3000,
+            loop: -1,
+            onUpdate: () => {
+                if (!particles.scene) return;
+                particles.clear();
+                const t = Date.now() / 800;
+                particles.fillStyle(0xffcc33, 0.8);
+                for(let i = 0; i < 3; i++) {
+                    const offset = i * 2;
+                    const px = Math.sin(t + offset) * 5;
+                    const py = -10 - (Math.abs(Math.sin(t * 1.5 + offset)) * 20);
+                    const size = 2 - (Math.abs(py)/20);
+                    if (size > 0) particles.fillCircle(px, py, size);
+                }
+            }
+        });
+
         new HealthComponent(fireContainer, 100);
-        fireContainer.setData({ interactiveChild: fire });
+        fireContainer.setData({ interactiveChild: hitArea });
         attachHealthBar(this.scene, fireContainer);
-        fire.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) buildingManager.showUpgradeMenu(fireContainer, 'campfire'); });
+        hitArea.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) buildingManager.showUpgradeMenu(fireContainer, 'campfire'); });
+
+        fireContainer.once(Phaser.GameObjects.Events.DESTROY, () => {
+            pulseTween.remove();
+            particleTween.remove();
+        });
 
         return fireContainer;
     }
+
     private createForge(x: number, y: number, buildingManager: any): Phaser.GameObjects.Container {
         const forgeContainer = this.scene.add.container(x, y).setDepth(9);
-        this.scene.physics.add.existing(forgeContainer, true); // Add static physics body
-        const forge = this.scene.add.rectangle(0, 0, 48, 48, 0, 0).setInteractive({ useHandCursor: true });
-        const shadows = this.scene.add.graphics().fillStyle(0x0a0a08, 0.7).fillEllipse(0, 26, 46, 10);
-        const base = this.scene.add.graphics().fillStyle(0x2a2520, 1).fillRect(-20, 16, 40, 8);
-        const anvil = this.scene.add.graphics().fillStyle(0x3a3a3a, 1).fillRect(-10, 8, 20, 8);
-        const hotIron = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-        const hammer = this.scene.add.graphics();
-        forgeContainer.add([shadows, base, anvil, hotIron, hammer, forge]);
+        this.scene.physics.add.existing(forgeContainer, true);
+
+        const hitArea = this.scene.add.rectangle(0, 0, 48, 48, 0, 0).setInteractive({ useHandCursor: true });
+        const g = this.scene.add.graphics();
+
+        // Ombre
+        g.fillStyle(0x000000, 0.5);
+        g.fillEllipse(0, 20, 40, 15);
+
+        // 1. Souche (Billot)
+        g.fillStyle(0x3e2723, 1);
+        g.fillRect(-15, 0, 30, 20);
+        g.lineStyle(1, 0x5d4037);
+        g.strokeEllipse(0, 0, 15, 5);
+
+        // 2. Enclume (Noir)
+        g.fillStyle(0x1a1a1a, 1);
+        g.fillRect(-12, -5, 24, 5); // Base
+        g.fillRect(-8, -12, 16, 7); // Col
+        g.fillRect(-15, -18, 30, 8); // Tête
+        g.beginPath();
+        g.moveTo(15, -18);
+        g.lineTo(25, -18); // Corne
+        g.lineTo(15, -12);
+        g.fillPath();
+
+        // 3. Marteau
+        g.fillStyle(0x5d4037, 1);
+        g.fillRect(8, 5, 4, 20);
+        g.fillStyle(0x424242, 1);
+        g.fillRect(5, 5, 10, 6);
+
+        // Effet Chaleur
+        const glow = this.scene.add.circle(-10, -15, 5, 0xff5722, 0).setBlendMode(Phaser.BlendModes.ADD);
+
+        forgeContainer.add([g, glow, hitArea]);
+
+        const glowTween = this.scene.tweens.add({
+            targets: glow,
+            alpha: { from: 0, to: 0.4 },
+            scale: { from: 1, to: 2 },
+            duration: 2000,
+            yoyo: true,
+            repeat: -1
+        });
+
         new HealthComponent(forgeContainer, 120);
-        forgeContainer.setData({ interactiveChild: forge });
+        forgeContainer.setData({ interactiveChild: hitArea });
         attachHealthBar(this.scene, forgeContainer);
-        forge.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) buildingManager.showUpgradeMenu(forgeContainer, 'forge'); });
+        hitArea.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) buildingManager.showUpgradeMenu(forgeContainer, 'forge'); });
+
+        forgeContainer.once(Phaser.GameObjects.Events.DESTROY, () => {
+            glowTween.remove();
+        });
 
         return forgeContainer;
     }
+
     private createStorage(x: number, y: number, buildingManager: any): Phaser.GameObjects.Container {
         const storageContainer = this.scene.add.container(x, y).setDepth(9);
-        this.scene.physics.add.existing(storageContainer, true); // Add static physics body
-        const stor = this.scene.add.rectangle(0, 0, 48, 48, 0, 0).setInteractive({ useHandCursor: true });
-        const shadows = this.scene.add.graphics().fillStyle(0x0a0a08, 0.7).fillEllipse(0, 24, 48, 12);
-        const mimicBody = this.scene.add.graphics().fillStyle(0x3a2a1a, 1).fillRect(-18, 2, 36, 18);
-        storageContainer.add([shadows, mimicBody, stor]);
+        this.scene.physics.add.existing(storageContainer, true);
+
+        const hitArea = this.scene.add.rectangle(0, 0, 48, 48, 0, 0).setInteractive({ useHandCursor: true });
+
+        // Ombre (fixe)
+        const shadow = this.scene.add.graphics();
+        shadow.fillStyle(0x000000, 0.4);
+        shadow.fillEllipse(0, 12, 36, 12);
+
+        // Corps du Mimic (Animé)
+        const bodyGroup = this.scene.add.container(0, 0);
+        const g = this.scene.add.graphics();
+
+        // Coffre
+        g.fillStyle(0x2d1e16, 1);
+        g.fillRect(-16, -16, 32, 24);
+        g.lineStyle(2, 0x555555);
+        g.strokeRect(-16, -16, 32, 24);
+
+        // Couvercle
+        g.fillStyle(0x3e2723, 1);
+        g.beginPath();
+        g.moveTo(-18, -16);
+        g.lineTo(18, -16);
+        g.lineTo(16, -26);
+        g.lineTo(-16, -26);
+        g.closePath();
+        g.fillPath();
+
+        // Dents
+        g.fillStyle(0xdddddd, 1);
+        g.fillTriangle(-10, -16, -6, -16, -8, -20);
+        g.fillTriangle(6, -16, 10, -16, 8, -20);
+
+        // Chaîne Droite (Mimic)
+        g.lineStyle(2, 0xaaaaaa);
+        g.beginPath();
+        g.moveTo(18, -12);
+        g.lineTo(30, -8);
+        g.strokePath();
+
+        bodyGroup.add(g);
+        storageContainer.add([shadow, bodyGroup, hitArea]);
+
+        const breatheTween = this.scene.tweens.add({
+            targets: bodyGroup,
+            scaleY: 1.05,
+            scaleX: 1.02,
+            y: -2,
+            duration: 2500,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
         new HealthComponent(storageContainer, 140);
-        storageContainer.setData({ interactiveChild: stor, capInc: 50 });
+        storageContainer.setData({ interactiveChild: hitArea, capInc: 50 });
         attachHealthBar(this.scene, storageContainer);
-        stor.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) buildingManager.showUpgradeMenu(storageContainer, 'storage'); });
+        hitArea.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) buildingManager.showUpgradeMenu(storageContainer, 'storage'); });
+
+        storageContainer.once(Phaser.GameObjects.Events.DESTROY, () => {
+            breatheTween.remove();
+        });
 
         return storageContainer;
     }
+
     private createBarracks(x: number, y: number, buildingManager: any): Phaser.GameObjects.Container {
         const barracksContainer = this.scene.add.container(x, y).setDepth(9);
-        this.scene.physics.add.existing(barracksContainer, true); // Add static physics body
-        const br = this.scene.add.rectangle(0, 0, 48, 48, 0, 0).setInteractive({ useHandCursor: true });
-        const shadows = this.scene.add.graphics().fillStyle(0x0a0a08, 0.7).fillEllipse(0, 26, 50, 12);
-        const building = this.scene.add.graphics().fillStyle(0x3a2a1a, 1).fillRect(-18, -8, 36, 24);
-        barracksContainer.add([shadows, building, br]);
+        this.scene.physics.add.existing(barracksContainer, true);
+
+        const hitArea = this.scene.add.rectangle(0, 0, 48, 48, 0, 0).setInteractive({ useHandCursor: true });
+        const g = this.scene.add.graphics();
+
+        // Ombre
+        g.fillStyle(0x000000, 0.5);
+        g.fillEllipse(0, 20, 50, 20);
+
+        // Structure (Taverne)
+        g.fillStyle(0x4e342e, 1);
+        g.fillRect(-20, -10, 40, 30);
+
+        // Poutres
+        g.fillStyle(0x3e2723, 1);
+        g.fillRect(-22, -10, 4, 30);
+        g.fillRect(18, -10, 4, 30);
+
+        // Toit
+        g.fillStyle(0x263238, 1);
+        g.beginPath();
+        g.moveTo(-28, -10);
+        g.lineTo(0, -35);
+        g.lineTo(28, -10);
+        g.fillPath();
+
+        // Fenêtre & Enseigne
+        g.fillStyle(0xffb300, 1);
+        g.fillRect(-8, 0, 16, 12); // Fenêtre
+        g.fillStyle(0x5d4037, 1);
+        g.fillRect(20, -5, 10, 2); // Support enseigne
+        g.fillStyle(0x8d6e63, 1);
+        g.fillRect(24, -5, 8, 10); // Panneau
+
+        // Lumière chaude
+        const light = this.scene.add.circle(0, 6, 20, 0xffb300, 0.2).setBlendMode(Phaser.BlendModes.ADD);
+
+        barracksContainer.add([g, light, hitArea]);
+
+        const lightTween = this.scene.tweens.add({
+            targets: light,
+            alpha: { from: 0.1, to: 0.3 },
+            duration: 1200,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Bounce.easeInOut'
+        });
+
         new HealthComponent(barracksContainer, 150);
-        barracksContainer.setData({ interactiveChild: br });
+        barracksContainer.setData({ interactiveChild: hitArea });
         attachHealthBar(this.scene, barracksContainer);
-        br.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) buildingManager.showUpgradeMenu(barracksContainer, 'barracks'); });
+        hitArea.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) buildingManager.showUpgradeMenu(barracksContainer, 'barracks'); });
+
+        barracksContainer.once(Phaser.GameObjects.Events.DESTROY, () => {
+            lightTween.remove();
+        });
 
         return barracksContainer;
     }
