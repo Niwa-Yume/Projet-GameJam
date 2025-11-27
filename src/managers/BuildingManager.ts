@@ -163,8 +163,23 @@ export class BuildingManager {
             case 'generator': this.generators.add(buildingContainer); break;
             case 'campfire': this.campfires.add(buildingContainer); break;
             case 'forge': this.forges.add(buildingContainer); this.registry.set('forgeCount', this.forges.getLength() + 1); break;
-            case 'storage': this.storages.add(buildingContainer); break;
-            case 'barracks': this.barracks.add(buildingContainer); this.registry.set('barracksCount', this.barracks.getLength() + 1); break; // Corrected line
+            case 'storage':
+                this.storages.add(buildingContainer);
+
+                // 1. Définir combien le coffre ajoute (ex: 50 ou une constante)
+                const capacityIncrease = 50; // Idéalement: GameConstants.STORAGE_CAPACITY
+
+                // 2. Mettre à jour le registre global
+                const currentMax = (this.registry.get('maxSoulShards') as number) ?? 100;
+                this.registry.set('maxSoulShards', currentMax + capacityIncrease);
+
+                // 3. Sauvegarder cette valeur dans le bâtiment (nécessaire pour la méthode sellBuilding)
+                buildingContainer.setData('capInc', capacityIncrease);
+
+                // 4. (Optionnel) Notifier l'UI que le max a changé
+                this.scene.game.events.emit('notify', `Capacité augmentée de +${capacityIncrease}`, 'success');
+                break;
+            case 'barracks': this.barracks.add(buildingContainer); this.registry.set('barracksCount', this.barracks.getLength() + 1); break;
         }
     }
 
