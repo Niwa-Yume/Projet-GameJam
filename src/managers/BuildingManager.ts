@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
 import { GameConstants } from '../scenes/GameConstants';
 import { PathfindingGrid } from '../scenes/PathfindingGrid';
-import type {SavedBuilding} from '../types/SaveData';
-import { BuildingFactory } from '../factories/BuildingFactory';
+import {BuildingFactory} from "../factories/BuildingFactory";
+import { Building } from '../entities/Building';
+import {Tower} from "../entities/Tower";
+import type { SavedBuilding } from '../types/SaveData';
 
 type BuildingKind = 'tower' | 'wall' | 'generator' | 'campfire' | 'forge' | 'storage' | 'barracks';
 type EnemyGO = Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
@@ -10,10 +12,14 @@ type EnemyGO = Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
 export class BuildingManager {
     private scene: Phaser.Scene;
     private grid: PathfindingGrid;
-    private registry: Phaser.Data.DataManager; // CORRECTION
+    private registry: Phaser.Data.DataManager;
     private factory: BuildingFactory;
     private enemies: Phaser.GameObjects.Group;
 
+    // --- LISTE LOGIQUE (Pour les stats/upgrades) ---
+    private buildings: Building[] = [];
+
+    // --- GROUPES PHYSIQUES (Pour les collisions/rendu) ---
     public towers!: Phaser.Physics.Arcade.StaticGroup;
     public walls!: Phaser.Physics.Arcade.StaticGroup;
     public generators!: Phaser.Physics.Arcade.StaticGroup;
@@ -22,19 +28,13 @@ export class BuildingManager {
     public storages!: Phaser.Physics.Arcade.StaticGroup;
     public barracks!: Phaser.Physics.Arcade.StaticGroup;
 
-    private towerCost: number = GameConstants.INITIAL_TOWER_COST;
-    private wallCost: number = GameConstants.INITIAL_WALL_COST;
-    private generatorCost: number = GameConstants.INITIAL_GENERATOR_COST;
-    private campfireCost: number = GameConstants.INITIAL_CAMPFIRE_COST;
-    private forgeCost: number = GameConstants.INITIAL_FORGE_COST;
-    private storageCost: number = GameConstants.INITIAL_STORAGE_COST;
-    private barracksCost: number = GameConstants.INITIAL_BARRACKS_COST;
-
+    // --- COÛTS ---
+    private costs: Record<BuildingKind, number>;
     private currentBuildKind: BuildingKind = 'tower';
 
+    // --- PLACEMENT / PREVIEW ---
     private previewGhost?: Phaser.GameObjects.Rectangle;
     private previewRangeGfx?: Phaser.GameObjects.Graphics;
-
     private sanctuaryPos!: { x: number; y: number };
 
     constructor(scene: Phaser.Scene, grid: PathfindingGrid, sanctuaryPos: {x: number, y: number}, enemies: Phaser.GameObjects.Group) {
@@ -45,14 +45,26 @@ export class BuildingManager {
         this.factory = new BuildingFactory(scene);
         this.enemies = enemies;
 
+        // Initialisation des coûts par défaut
+        this.costs = {
+            tower: GameConstants.INITIAL_TOWER_COST,
+            wall: GameConstants.INITIAL_WALL_COST,
+            generator: GameConstants.INITIAL_GENERATOR_COST,
+            campfire: GameConstants.INITIAL_CAMPFIRE_COST,
+            forge: GameConstants.INITIAL_FORGE_COST,
+            storage: GameConstants.INITIAL_STORAGE_COST,
+            barracks: GameConstants.INITIAL_BARRACKS_COST
+        };
+
         this.initializeGroups();
         this.initializeCosts();
         this.initializePreview();
         this.registerInputHandlers();
 
-        // CORRECTION: suppression de 'parent'
+        // Écouteur pour changer le type de bâtiment
         this.registry.events.on('changedata-buildKind', (_parent: any, value: BuildingKind) => {
             this.currentBuildKind = value;
+            this.updateRegistryCosts(); // Mettre à jour le coût affiché
         });
 
         this.scene.events.on(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
@@ -69,22 +81,20 @@ export class BuildingManager {
     }
 
     private initializeCosts(): void {
-        this.towerCost = this.registry.get('towerCost') ?? GameConstants.INITIAL_TOWER_COST;
-        this.wallCost = this.registry.get('wallCost') ?? GameConstants.INITIAL_WALL_COST;
-        this.generatorCost = this.registry.get('generatorCost') ?? GameConstants.INITIAL_GENERATOR_COST;
-        this.campfireCost = this.registry.get('campfireCost') ?? GameConstants.INITIAL_CAMPFIRE_COST;
-        this.forgeCost = this.registry.get('forgeCost') ?? GameConstants.INITIAL_FORGE_COST;
-        this.storageCost = this.registry.get('storageCost') ?? GameConstants.INITIAL_STORAGE_COST;
-        this.barracksCost = this.registry.get('barracksCost') ?? GameConstants.INITIAL_BARRACKS_COST;
+        this.costs.tower = this.registry.get('towerCost') ?? GameConstants.INITIAL_TOWER_COST;
+        this.costs.wall = this.registry.get('wallCost') ?? GameConstants.INITIAL_WALL_COST;
+        this.costs.generator = this.registry.get('generatorCost') ?? GameConstants.INITIAL_GENERATOR_COST;
+        this.costs.campfire = this.registry.get('campfireCost') ?? GameConstants.INITIAL_CAMPFIRE_COST;
+        this.costs.forge = this.registry.get('forgeCost') ?? GameConstants.INITIAL_FORGE_COST;
+        this.costs.storage = this.registry.get('storageCost') ?? GameConstants.INITIAL_STORAGE_COST;
+        this.costs.barracks = this.registry.get('barracksCost') ?? GameConstants.INITIAL_BARRACKS_COST;
 
         this.registry.set('buildKind', this.currentBuildKind);
-        this.registry.set('towerCost', this.towerCost);
-        this.registry.set('wallCost', this.wallCost);
-        this.registry.set('generatorCost', this.generatorCost);
-        this.registry.set('campfireCost', this.campfireCost);
-        this.registry.set('forgeCost', this.forgeCost);
-        this.registry.set('storageCost', this.storageCost);
-        this.registry.set('barracksCost', this.barracksCost);
+        this.updateRegistryCosts();
+    }
+
+    private updateRegistryCosts(): void {
+        this.registry.set('towerCost', this.costs.tower);
         this.registry.set('buildCost', this.getCurrentCost());
     }
 
@@ -102,38 +112,64 @@ export class BuildingManager {
         });
     }
 
-    public update(time: number): void {
-        this.updateTowers(time);
-    }
+    // --- BOUCLE DE JEU (UPDATE) ---
 
-    private updateTowers(time: number): void {
-        for (const obj of this.towers.getChildren()) {
-            const tower = obj as Phaser.GameObjects.Container;
-            if (time < ((tower.getData('nextFire') as number) ?? 0)) continue;
-            const towerX = tower.x;
-            const towerY = tower.y;
-            const target = this.findTarget(towerX, towerY, GameConstants.TOWER_RANGE);
-            if (!target) continue;
-            this.fireFromTower(tower, target);
-            tower.setData('nextFire', time + GameConstants.TOWER_FIRE_RATE * ((tower.getData('fireRateMul') as number) ?? 1));
-        }
+    public update(time: number): void {
+        // 1. Mise à jour de la logique interne des bâtiments (production, cooldowns)
+        // On utilise un delta fixe de 16ms pour la logique
+        this.buildings.forEach(b => {
+            if (b.getIsActive()) {
+                b.update(16);
+            }
+        });
+
+        // 2. Gestion spécifique des Tours (Tir)
+        // On vérifie si les tours logiques sont prêtes à tirer
+        this.buildings.forEach(b => {
+            if (b.type === 'tower' && b.getIsActive()) {
+                const towerLogic = b as Tower;
+                // Si la tour est prête (selon sa propre logique interne)
+                if (towerLogic.canFire(time)) {
+                    const target = this.findTarget(b.x, b.y, towerLogic.getRange());
+                    if (target) {
+                        towerLogic.fire(time); // Reset le cooldown de la tour
+                        this.fireVisualBullet(b.sprite as Phaser.GameObjects.Container, target);
+                    }
+                }
+            }
+        });
     }
 
     private findTarget(x: number, y: number, range: number): EnemyGO | null {
         let best: EnemyGO | null = null;
         let bestD = Number.POSITIVE_INFINITY;
-        for (const obj of this.enemies.getChildren() as EnemyGO[]) {
+        // Optimisation : on parcourt les ennemis actifs
+        const enemies = this.enemies.getChildren() as EnemyGO[];
+        for (const obj of enemies) {
+            if (!obj.active) continue;
             const d = Phaser.Math.Distance.Between(x, y, obj.x, obj.y);
-            if (d <= range && d < bestD) { best = obj; bestD = d; }
+            if (d <= range && d < bestD) {
+                best = obj;
+                bestD = d;
+            }
         }
         return best;
     }
 
-    private fireFromTower(tower: Phaser.GameObjects.Container, target: EnemyGO): void {
-        const glow = tower.getData('glow') as Phaser.GameObjects.Graphics | undefined;
-        if (glow) this.scene.tweens.add({ targets: glow, alpha: { from: 1.0, to: 0.3 }, duration: 150, ease: 'Quad.Out' });
-        this.scene.game.events.emit('fire-bullet', { x: tower.x, y: tower.y, target, type: 'tower' });
+    private fireVisualBullet(towerContainer: Phaser.GameObjects.Container, target: EnemyGO): void {
+        if (!towerContainer) return;
+
+        // Effet visuel sur la tour (lueur)
+        const glow = towerContainer.getData('glow') as Phaser.GameObjects.Graphics | undefined;
+        if (glow) {
+            this.scene.tweens.add({ targets: glow, alpha: { from: 1.0, to: 0.3 }, duration: 150, ease: 'Quad.Out' });
+        }
+
+        // Émission de l'événement pour que la GameScene crée le projectile physique
+        this.scene.game.events.emit('fire-bullet', { x: towerContainer.x, y: towerContainer.y, target, type: 'tower' });
     }
+
+    // --- GESTION DES COÛTS ET RESSOURCES ---
 
     private addShards(delta: number): void {
         const cur = (this.registry.get('soulShards') as number) ?? 0;
@@ -143,82 +179,76 @@ export class BuildingManager {
     }
 
     private getCurrentCost(): number {
-        this.currentBuildKind = this.registry.get('buildKind');
-        switch (this.currentBuildKind) {
-            case 'tower': return this.towerCost;
-            case 'wall': return this.wallCost;
-            case 'generator': return this.generatorCost;
-            case 'campfire': return this.campfireCost;
-            case 'forge': return this.forgeCost;
-            case 'storage': return this.storageCost;
-            case 'barracks': return this.barracksCost;
-        }
+        return this.costs[this.currentBuildKind];
     }
+
+    // --- CRÉATION DE BÂTIMENT ---
 
     private createBuilding(kind: BuildingKind, x: number, y: number): void {
-        const buildingContainer = this.factory.createBuilding(kind, x, y, this);
-        switch (kind) {
-            case 'tower': this.towers.add(buildingContainer); break;
-            case 'wall': this.walls.add(buildingContainer); this.recomputeGrid(); this.scene.game.events.emit('grid-updated'); break;
-            case 'generator': this.generators.add(buildingContainer); break;
-            case 'campfire': this.campfires.add(buildingContainer); break;
-            case 'forge': this.forges.add(buildingContainer); this.registry.set('forgeCount', this.forges.getLength() + 1); break;
-            case 'storage': this.storages.add(buildingContainer); break;
-            case 'barracks': this.barracks.add(buildingContainer); this.registry.set('barracksCount', this.barracks.getLength() + 1); break; // Corrected line
+        // 1. La Factory crée le Visuel ET la Logique (stockée dans data 'buildingInstance')
+        const container = this.factory.createBuilding(kind, x, y, this);
+
+        // 2. On récupère la logique pour la stocker dans notre liste buildings
+        const logic = container.getData('buildingInstance') as Building;
+        if (logic) {
+            this.buildings.push(logic);
+        } else {
+            console.warn(`[BuildingManager] Attention: Instance logique manquante pour ${kind}`);
         }
+
+        // 3. Ajout aux groupes physiques Phaser (pour les collisions)
+        switch (kind) {
+            case 'tower':
+                this.towers.add(container);
+                break;
+            case 'wall':
+                this.walls.add(container);
+                this.recomputeGrid();
+                this.scene.game.events.emit('grid-updated');
+                break;
+            case 'generator':
+                this.generators.add(container);
+                break;
+            case 'campfire':
+                this.campfires.add(container);
+                break;
+            case 'forge':
+                this.forges.add(container);
+                this.registry.set('forgeCount', this.forges.getLength());
+                break;
+            case 'storage':
+                this.storages.add(container);
+                break;
+            case 'barracks':
+                this.barracks.add(container);
+                this.registry.set('barracksCount', this.barracks.getLength());
+                break;
+        }
+
+        console.log(`Bâtiment construit: ${kind} à (${x},${y})`);
     }
 
-    private updatePlacementPreview(pointer: Phaser.Input.Pointer): void {
-        if (!this.previewGhost || !this.previewRangeGfx) return;
-        const worldX = pointer.worldX;
-        const worldY = pointer.worldY;
-        const gameAreaX = GameConstants.UI_MARGIN_LEFT;
-        const gameAreaY = GameConstants.UI_MARGIN_TOP;
-        const gameAreaRight = gameAreaX + GameConstants.GAME_AREA_WIDTH;
-        const gameAreaBottom = gameAreaY + GameConstants.GAME_AREA_HEIGHT;
-        if (worldX < gameAreaX || worldX > gameAreaRight || worldY < gameAreaY || worldY > gameAreaBottom) {
-            this.previewGhost.setVisible(false);
-            this.previewRangeGfx?.setVisible(false);
-            return;
-        }
-        const TS = GameConstants.TILE_SIZE;
-        const cellX = Math.floor((worldX - gameAreaX) / TS);
-        const cellY = Math.floor((worldY - gameAreaY) / TS);
-        const snappedX = gameAreaX + cellX * TS + TS / 2;
-        const snappedY = gameAreaY + cellY * TS + TS / 2;
-        const valid = this.canPlaceAt(snappedX, snappedY);
-        this.previewGhost
-            .setPosition(snappedX, snappedY)
-            .setFillStyle(valid ? 0x9f8d62 : 0x7a1a1a, 0.28)
-            .setVisible(true);
-        this.previewRangeGfx?.clear();
-        if (this.registry.get('buildKind') === 'tower') {
-            this.previewRangeGfx?.lineStyle(1, valid ? 0x9f8d62 : 0x7a1a1a, 0.85);
-            this.previewRangeGfx?.strokeCircle(snappedX, snappedY, GameConstants.TOWER_RANGE);
-            this.previewRangeGfx?.setVisible(true);
-        } else {
-            this.previewRangeGfx?.setVisible(false);
-        }
-    }
+    // --- INPUT & PLACEMENT (Ta logique d'avant) ---
 
     private handlePointerDown(pointer: Phaser.Input.Pointer): void {
         const worldX = pointer.worldX;
         const worldY = pointer.worldY;
         const gameAreaX = GameConstants.UI_MARGIN_LEFT;
         const gameAreaY = GameConstants.UI_MARGIN_TOP;
-        const gameAreaRight = gameAreaX + GameConstants.GAME_AREA_WIDTH;
-        const gameAreaBottom = gameAreaY + GameConstants.GAME_AREA_HEIGHT;
-        if (worldX < gameAreaX || worldX > gameAreaRight || worldY < gameAreaY || worldY > gameAreaBottom) {
-            return;
-        }
+
+        // Ignorer si hors zone de jeu
+        if (worldX < gameAreaX || worldY < gameAreaY) return;
+
         const TS = GameConstants.TILE_SIZE;
         const cellX = Math.floor((worldX - gameAreaX) / TS);
         const cellY = Math.floor((worldY - gameAreaY) / TS);
         const snappedX = gameAreaX + cellX * TS + TS / 2;
         const snappedY = gameAreaY + cellY * TS + TS / 2;
+
         if (!this.canPlaceAt(snappedX, snappedY)) {
-            const shards = (this.registry.get('soulShards') as number) ?? 0;
             const cost = this.getCurrentCost();
+            const shards = (this.registry.get('soulShards') as number) ?? 0;
+
             if (shards < cost) {
                 this.scene.game.events.emit('notify', `Pas assez d'Âmes (coût: ${cost})`, 'error');
             } else if (this.isSanctuaryCell(snappedX, snappedY)) {
@@ -230,16 +260,61 @@ export class BuildingManager {
             }
             return;
         }
+
+        // Paiement
         const cost = this.getCurrentCost();
         const shards = (this.registry.get('soulShards') as number) ?? 0;
         this.registry.set('soulShards', shards - cost);
+
+        // Construction effective
         this.createBuilding(this.registry.get('buildKind'), snappedX, snappedY);
+
+        // Augmentation prix tour (mécanique spécifique)
         if (this.registry.get('buildKind') === 'tower') {
-            this.towerCost = Math.ceil(this.towerCost * 1.15);
-            this.registry.set('towerCost', this.towerCost);
+            this.costs.tower = Math.ceil(this.costs.tower * 1.15);
+            this.updateRegistryCosts();
         }
-        this.registry.set('buildCost', this.getCurrentCost());
+
         this.updatePlacementPreview(pointer);
+    }
+
+    private updatePlacementPreview(pointer: Phaser.Input.Pointer): void {
+        if (!this.previewGhost || !this.previewRangeGfx) return;
+
+        const worldX = pointer.worldX;
+        const worldY = pointer.worldY;
+        const gameAreaX = GameConstants.UI_MARGIN_LEFT;
+        const gameAreaY = GameConstants.UI_MARGIN_TOP;
+        const gameAreaRight = gameAreaX + GameConstants.GAME_AREA_WIDTH;
+        const gameAreaBottom = gameAreaY + GameConstants.GAME_AREA_HEIGHT;
+
+        if (worldX < gameAreaX || worldX > gameAreaRight || worldY < gameAreaY || worldY > gameAreaBottom) {
+            this.previewGhost.setVisible(false);
+            this.previewRangeGfx.setVisible(false);
+            return;
+        }
+
+        const TS = GameConstants.TILE_SIZE;
+        const cellX = Math.floor((worldX - gameAreaX) / TS);
+        const cellY = Math.floor((worldY - gameAreaY) / TS);
+        const snappedX = gameAreaX + cellX * TS + TS / 2;
+        const snappedY = gameAreaY + cellY * TS + TS / 2;
+
+        const valid = this.canPlaceAt(snappedX, snappedY);
+
+        this.previewGhost
+            .setPosition(snappedX, snappedY)
+            .setFillStyle(valid ? 0x9f8d62 : 0x7a1a1a, 0.28)
+            .setVisible(true);
+
+        this.previewRangeGfx.clear();
+        if (this.registry.get('buildKind') === 'tower') {
+            this.previewRangeGfx.lineStyle(1, valid ? 0x9f8d62 : 0x7a1a1a, 0.85);
+            this.previewRangeGfx.strokeCircle(snappedX, snappedY, GameConstants.TOWER_RANGE);
+            this.previewRangeGfx.setVisible(true);
+        } else {
+            this.previewRangeGfx.setVisible(false);
+        }
     }
 
     private canPlaceAt(x: number, y: number): boolean {
@@ -251,236 +326,129 @@ export class BuildingManager {
     }
 
     private isOccupied(x: number, y: number): boolean {
-        const checkGroup = (group: Phaser.GameObjects.Group | Phaser.Physics.Arcade.StaticGroup) => {
-            return (group.getChildren() as any[]).some(building => {
-                const container = building as Phaser.GameObjects.Container;
-                return Math.abs(container.x - x) < 1 && Math.abs(container.y - y) < 1;
-            });
-        };
-        return checkGroup(this.towers) ||
-            checkGroup(this.walls) ||
-            checkGroup(this.generators) ||
-            checkGroup(this.campfires) ||
-            checkGroup(this.forges) ||
-            checkGroup(this.storages) ||
-            checkGroup(this.barracks);
+        // On vérifie tous les bâtiments actifs
+        return this.buildings.some(b =>
+            b.getIsActive() &&
+            Math.abs(b.x - x) < 1 && Math.abs(b.y - y) < 1
+        );
     }
 
     private isSanctuaryCell(x: number, y: number): boolean {
         return Math.abs(x - this.sanctuaryPos.x) < 1 && Math.abs(y - this.sanctuaryPos.y) < 1;
     }
 
-    public showUpgradeMenu(building: Phaser.GameObjects.Container, type: BuildingKind): void {
-        this.registry.set('upgradeMenuBuilding', { building, type, x: building.x, y: building.y });
-        this.scene.game.events.emit('showUpgradeMenu', building, type);
+    // --- LOGIQUE UPGRADE / VENTE (Nouveau système via Classes) ---
+
+    public showUpgradeMenu(container: Phaser.GameObjects.Container, type: BuildingKind): void {
+        // On récupère l'objet Logique qu'on a attaché dans la Factory
+        const logic = container.getData('buildingInstance') as Building;
+
+        if (logic) {
+            this.registry.set('upgradeMenuBuilding', { building: container, type, x: container.x, y: container.y });
+            // On passe aussi la logique pour que l'UI puisse lire les stats
+            this.scene.game.events.emit('showUpgradeMenu', container, type, logic);
+        } else {
+            console.error("[BuildingManager] Pas de logique associée à ce bâtiment !");
+        }
     }
 
-    public upgradeBuildingLevel(building: Phaser.GameObjects.Container, type: 'tower' | 'generator'): boolean {
+    public upgradeBuildingLevel(container: Phaser.GameObjects.Container, type: 'tower' | 'generator'): boolean {
+        const logic = container.getData('buildingInstance') as Building;
+        if (!logic) return false;
+
         const forgeCount = (this.registry.get('forgeCount') as number) ?? 0;
         if (forgeCount <= 0) {
             this.scene.game.events.emit('notify', 'Construisez une Forge pour débloquer les améliorations', 'error');
             return false;
         }
-        const currentLevel = (building.getData('upgradeLevel') as number) ?? 0;
-        if (currentLevel >= 3) {
-            this.scene.game.events.emit('notify', 'Niveau maximum atteint', 'info');
-            return false;
-        }
-        const upgradeCosts = type === 'tower' ? [30, 60, 120] : [40, 80, 160];
-        const cost = upgradeCosts[currentLevel];
+
+        const cost = logic.getUpgradeCost();
         const shards = (this.registry.get('soulShards') as number) ?? 0;
+
         if (shards < cost) {
             this.scene.game.events.emit('notify', `Pas assez d'Âmes (coût: ${cost})`, 'error');
             return false;
         }
-        this.registry.set('soulShards', shards - cost);
-        const newLevel = currentLevel + 1;
-        building.setData('upgradeLevel', newLevel);
-        if (type === 'tower') {
-            const fireRateMul = 1 - (newLevel * 0.15);
-            const damageMul = 1 + (newLevel * 0.5);
-            building.setData('fireRateMul', fireRateMul);
-            building.setData('damageMul', damageMul);
-            this.scene.game.events.emit('notify', `Tour améliorée au niveau ${newLevel}`, 'success');
+
+        // Appel à la méthode upgrade() de la classe Building
+        if (logic.upgrade()) {
+            this.registry.set('soulShards', shards - cost);
+
+            // Mise à jour des datas du container (pour rétrocompatibilité si besoin)
+            container.setData('upgradeLevel', logic.getStats().level);
+
+            this.scene.game.events.emit('notify', `${logic.getDisplayName()} amélioré !`, 'success');
+
+            if (type === 'generator') {
+                this.scene.game.events.emit('generator-changed');
+            }
+            return true;
         } else {
-            const yieldMul = 1 + (newLevel * 0.75);
-            building.setData('yieldMul', yieldMul);
-            this.scene.game.events.emit('notify', `Générateur amélioré au niveau ${newLevel} (+${(yieldMul * 100).toFixed(0)}% production)`, 'success');
-            this.scene.game.events.emit('generator-changed');
+            this.scene.game.events.emit('notify', 'Niveau maximum atteint', 'info');
+            return false;
         }
-        return true;
     }
 
-    public getUpgradeInfo(building: Phaser.GameObjects.Container, type: 'tower' | 'generator'): any {
-        const level = (building.getData('upgradeLevel') as number) ?? 0;
-        const maxLevel = 3;
-        const upgradeCosts = type === 'tower' ? [30, 60, 120] : [40, 80, 160];
-        const nextCost = level < maxLevel ? upgradeCosts[level] : 0;
-        let currentStats = '';
-        let nextStats = '';
-        if (type === 'tower') {
-            const fireRate = (building.getData('fireRateMul') as number) ?? 1;
-            const damage = (building.getData('damageMul') as number) ?? 1;
-            currentStats = `Cadence: ${(fireRate * 100).toFixed(0)}%, Dégâts: x${damage.toFixed(1)}`;
-            if (level < maxLevel) {
-                const nextFireRate = 1 - ((level + 1) * 0.15);
-                const nextDamage = 1 + ((level + 1) * 0.5);
-                nextStats = `Cadence: ${(nextFireRate * 100).toFixed(0)}%, Dégâts: x${nextDamage.toFixed(1)}`;
-            }
-        } else {
-            const yieldMul = (building.getData('yieldMul') as number) ?? 1;
-            currentStats = `Production: x${yieldMul.toFixed(2)} (${(GameConstants.GENERATOR_YIELD * yieldMul).toFixed(1)} âmes/2s)`;
-            if (level < maxLevel) {
-                const nextYield = 1 + ((level + 1) * 0.75);
-                nextStats = `Production: x${nextYield.toFixed(2)} (${(GameConstants.GENERATOR_YIELD * nextYield).toFixed(1)} âmes/2s)`;
-            }
-        }
-        return { level, maxLevel, nextCost, currentStats, nextStats };
-    }
+    public sellBuilding(container: Phaser.GameObjects.Container, type: BuildingKind): boolean {
+        const logic = container.getData('buildingInstance') as Building;
+        if (!logic) return false;
 
-    public sellBuilding(building: Phaser.GameObjects.Container, type: BuildingKind): boolean {
-        let baseCost = 0;
-        let buildingName = '';
-        let group: Phaser.GameObjects.Group | Phaser.Physics.Arcade.StaticGroup | null = null;
-        switch (type) {
-            case 'tower': baseCost = this.towerCost; buildingName = 'Tour'; group = this.towers; break;
-            case 'generator': baseCost = this.generatorCost; buildingName = 'Générateur'; group = this.generators; this.scene.game.events.emit('generator-changed'); break;
-            case 'wall': baseCost = this.wallCost; buildingName = 'Mur'; group = this.walls; break;
-            case 'campfire': baseCost = this.campfireCost; buildingName = 'Feu de camp'; group = this.campfires; break;
-            case 'forge': baseCost = this.forgeCost; buildingName = 'Forge'; group = this.forges; this.registry.set('forgeCount', this.forges.getLength() -1); break;
-            case 'storage':
-                baseCost = this.storageCost; buildingName = 'Réserve'; group = this.storages;
-                const capInc = building.getData('capInc') as number;
-                const maxShards = (this.registry.get('maxSoulShards') as number) ?? 100;
-                this.registry.set('maxSoulShards', Math.max(100, maxShards - capInc));
-                break;
-            case 'barracks': baseCost = this.barracksCost; buildingName = 'Caserne'; group = this.barracks; this.registry.set('barracksCount', this.barracks.getLength() - 1); break;
-        }
-        const refund = Math.floor(baseCost * GameConstants.SELL_REFUND_PERCENTAGE);
+        const refund = logic.getSellPrice();
         this.addShards(refund);
 
-        if (group) group.remove(building, true, true);
+        // Suppression logique
+        const idx = this.buildings.indexOf(logic);
+        if (idx > -1) this.buildings.splice(idx, 1);
+        logic.destroy();
 
+        // Suppression physique
+        let group: Phaser.Physics.Arcade.StaticGroup | null = null;
+        switch (type) {
+            case 'tower': group = this.towers; break;
+            case 'wall': group = this.walls; break;
+            case 'generator': group = this.generators; break;
+            case 'campfire': group = this.campfires; break;
+            case 'forge': group = this.forges; break;
+            case 'storage': group = this.storages; break;
+            case 'barracks': group = this.barracks; break;
+        }
+
+        if (group) group.remove(container, true, true);
+
+        // Mises à jour globales
         if (type === 'wall') {
             this.recomputeGrid();
             this.scene.game.events.emit('grid-updated');
         }
-        this.scene.game.events.emit('notify', `${buildingName} vendu pour ${refund} âmes`, 'success');
+        if (type === 'forge') this.registry.set('forgeCount', this.forges.getLength());
+        if (type === 'barracks') this.registry.set('barracksCount', this.barracks.getLength());
+        if (type === 'generator') this.scene.game.events.emit('generator-changed');
+        if (type === 'storage') {
+            // Logique spécifique stockage (ex: capInc récupéré depuis logic ou data)
+            const capInc = container.getData('capInc') as number || 50;
+            const maxShards = (this.registry.get('maxSoulShards') as number) ?? 100;
+            this.registry.set('maxSoulShards', Math.max(100, maxShards - capInc));
+        }
+
+        this.scene.game.events.emit('notify', `Vendu pour ${refund} âmes`, 'success');
         return true;
     }
 
-    public collectBuildingsData(): SavedBuilding[] {
-        const buildings: SavedBuilding[] = [];
-        if (!this.towers || !this.walls || !this.generators) return buildings;
+    public getUpgradeInfo(container: Phaser.GameObjects.Container, _type?: 'tower' | 'generator'): any {
+        const logic = container.getData('buildingInstance') as Building;
+        if (!logic) return null;
 
-        const processGroup = (group: Phaser.GameObjects.Group | Phaser.Physics.Arcade.StaticGroup, type: BuildingKind) => {
-            for (const obj of group.getChildren()) {
-                const building = obj as Phaser.GameObjects.Container;
-                const data: Partial<SavedBuilding> = { type, x: building.x, y: building.y };
-                const health = building.getData('health') as any;
-                if (health) {
-                    data.hp = health.getHp();
-                    data.maxHp = health.getMaxHp();
-                }
-                if (type === 'tower' || type === 'generator') {
-                    data.upgradeLevel = building.getData('upgradeLevel');
-                    if (type === 'tower') {
-                        data.fireRateMul = building.getData('fireRateMul');
-                        data.damageMul = building.getData('damageMul');
-                    } else {
-                        data.yieldMul = building.getData('yieldMul');
-                    }
-                }
-                if (type === 'storage') data.capInc = building.getData('capInc');
-                buildings.push(data as SavedBuilding);
-            }
+        const stats = logic.getStats();
+        return {
+            level: stats.level,
+            maxLevel: stats.maxLevel,
+            nextCost: logic.getUpgradeCost(),
+            currentStats: logic.getDetailedStats(),
+            nextStats: "Amélioration disponible"
         };
-
-        processGroup(this.towers, 'tower');
-        processGroup(this.walls, 'wall');
-        processGroup(this.generators, 'generator');
-        processGroup(this.campfires, 'campfire');
-        processGroup(this.forges, 'forge');
-        processGroup(this.storages, 'storage');
-        processGroup(this.barracks, 'barracks');
-
-        return buildings;
     }
 
-    // ... La méthode restoreBuildings (que nous avons corrigée précédemment) reste inchangée ...
-    public restoreBuildings(buildings: SavedBuilding[]): void {
-        for (const buildingData of buildings) {
-            // 1. Recréation physique et visuelle
-            const buildingContainer = this.factory.createBuilding(buildingData.type, buildingData.x, buildingData.y, this);
-
-            // 2. Ajout aux groupes physiques (Important pour les collisions/détections)
-            switch (buildingData.type) {
-                case 'tower': this.towers.add(buildingContainer); break;
-                case 'wall': this.walls.add(buildingContainer); break;
-                case 'generator': this.generators.add(buildingContainer); break;
-                case 'campfire': this.campfires.add(buildingContainer); break;
-                case 'forge': this.forges.add(buildingContainer); break;
-                case 'storage': this.storages.add(buildingContainer); break;
-                case 'barracks': this.barracks.add(buildingContainer); break;
-            }
-
-            // 3. Restauration de la Santé
-            const health = buildingContainer.getData('health') as any;
-            if (health && buildingData.hp !== undefined) {
-                health.setHp(buildingData.hp);
-            }
-
-            // 4. Restauration du Niveau et des Stats (C'est ce qu'il manquait !)
-            if (buildingData.upgradeLevel !== undefined) {
-                buildingContainer.setData('upgradeLevel', buildingData.upgradeLevel);
-            }
-
-            // Spécifique aux Tours (Remettre les dégâts et la cadence)
-            if (buildingData.type === 'tower') {
-                if (buildingData.fireRateMul) buildingContainer.setData('fireRateMul', buildingData.fireRateMul);
-                if (buildingData.damageMul) buildingContainer.setData('damageMul', buildingData.damageMul);
-                // Initialiser le prochain tir à "maintenant" pour qu'elle tire tout de suite
-                buildingContainer.setData('nextFire', this.scene.time.now);
-            }
-
-            // Spécifique aux Générateurs (Remettre la production)
-            if (buildingData.type === 'generator') {
-                if (buildingData.yieldMul) buildingContainer.setData('yieldMul', buildingData.yieldMul);
-            }
-
-            // Spécifique aux Réserves (Remettre l'augmentation de capacité)
-            if (buildingData.type === 'storage') {
-                if (buildingData.capInc) buildingContainer.setData('capInc', buildingData.capInc);
-            }
-        }
-
-        // 5. Mise à jour globale après la boucle
-        // On signale au jeu que les murs sont là (pour le pathfinding)
-        if (this.walls.getLength() > 0) {
-            this.recomputeGrid();
-            this.scene.game.events.emit('grid-updated');
-        }
-
-        // On signale au jeu de recalculer la production d'âmes
-        this.scene.game.events.emit('generator-changed');
-
-        // On met à jour les compteurs globaux
-        this.registry.set('forgeCount', this.forges.getLength());
-        this.registry.set('barracksCount', this.barracks.getLength());
-    }
-
-    public findBuildingAt(x: number, y: number): Phaser.GameObjects.Container | undefined {
-        const allBuildings = [
-            ...this.walls.getChildren(), ...this.towers.getChildren(), ...this.generators.getChildren(),
-            ...this.campfires.getChildren(), ...this.forges.getChildren(), ...this.storages.getChildren(),
-            ...this.barracks.getChildren()
-        ];
-        for (const obj of allBuildings) {
-            const go = obj as Phaser.GameObjects.Container;
-            if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameConstants.ATTACK_RANGE) return go; // Return the container itself
-        }
-        return undefined;
-    }
+    // --- UTILITAIRES (GRID & SAVE) ---
 
     public recomputeGrid(): void {
         const gameAreaX = GameConstants.UI_MARGIN_LEFT;
@@ -503,61 +471,62 @@ export class BuildingManager {
         };
     }
 
-    public findPath(start: { cx: number; cy: number }, goal: { cx: number; cy: number }): { cx: number; cy: number }[] | null {
-        if (!this.inBounds(start.cx, start.cy) || !this.inBounds(goal.cx, goal.cy)) return null;
-        const grid = this.grid.getGrid();
-        const q: { cx: number; cy: number }[] = [];
-        const seen = new Set<string>();
-        const parent = new Map<string, string>();
-        const key = (c: { cx: number; cy: number }) => `${c.cx},${c.cy}`;
-        q.push(start);
-        seen.add(key(start));
-        const dirs = [ [1,0], [-1,0], [0,1], [0,-1] ];
-        while (q.length) {
-            const cur = q.shift()!;
-            if (cur.cx === goal.cx && cur.cy === goal.cy) {
-                const out: { cx: number; cy: number }[] = [];
-                let k = key(cur);
-                while (true) {
-                    const [sx, sy] = k.split(',').map(Number);
-                    out.push({ cx: sx, cy: sy });
-                    const pk = parent.get(k);
-                    if (!pk) break;
-                    k = pk;
+    public collectBuildingsData(): SavedBuilding[] {
+        // On utilise la liste logique qui contient tout ce qu'il faut
+        return this.buildings.map(b => {
+            const stats = b.getStats();
+            const data: any = {
+                type: b.type,
+                x: b.x,
+                y: b.y,
+                hp: stats.hp,
+                maxHp: stats.maxHp,
+                upgradeLevel: stats.level
+            };
+
+            // Sauvegarde de propriétés spécifiques via data container si besoin
+            if (b.type === 'storage' && b.sprite) {
+                data.capInc = b.sprite.getData('capInc');
+            }
+
+            return data;
+        });
+    }
+
+    public restoreBuildings(buildingsData: SavedBuilding[]): void {
+        for (const data of buildingsData) {
+            // Création standard qui met tout en place (Physique + Logique)
+            this.createBuilding(data.type, data.x, data.y);
+
+            // Récupération de l'instance qu'on vient de créer (c'est la dernière ajoutée)
+            const logic = this.buildings[this.buildings.length - 1];
+            const container = logic.sprite as Phaser.GameObjects.Container;
+
+            // Restauration des stats
+            if (logic) {
+                // On force le niveau
+                while (logic.getStats().level < (data.upgradeLevel || 1)) {
+                    logic.upgrade(); // Simule les upgrades pour avoir les bonnes stats
                 }
-                out.reverse();
-                return out;
+                // On force les HP
+                if (data.hp !== undefined) {
+                    logic.takeDamage(logic.getStats().hp - data.hp); // Ajustement basique
+                }
             }
-            for (const [dx, dy] of dirs) {
-                const nx = cur.cx + dx, ny = cur.cy + dy;
-                if (!this.inBounds(nx, ny)) continue;
-                if (grid[ny][nx]) continue;
-                const nk = `${nx},${ny}`;
-                if (seen.has(nk)) continue;
-                seen.add(nk);
-                parent.set(nk, key(cur));
-                q.push({ cx: nx, cy: ny });
+
+            // Spécifique Storage
+            if (data.type === 'storage' && data.capInc && container) {
+                container.setData('capInc', data.capInc);
             }
         }
-        return null;
-    }
 
-    public pickSpawnCell(): { cx: number; cy: number } | null {
-        const { rows } = this.grid.getDimensions();
-        const cx = 0;
-        for (let i = 0; i < 10; i++) {
-            const cy = Phaser.Math.Between(0, rows - 1);
-            if (!this.grid.isBlocked(cx, cy)) return { cx, cy };
+        // Mises à jour finales
+        if (this.walls.getLength() > 0) {
+            this.recomputeGrid();
+            this.scene.game.events.emit('grid-updated');
         }
-        for (let cy = 0; cy < rows; cy++) {
-            if (!this.grid.isBlocked(cx, cy)) return { cx, cy };
-        }
-        return null;
-    }
-
-    private inBounds(cx: number, cy: number): boolean {
-        const { cols, rows } = this.grid.getDimensions();
-        return cx >= 0 && cy >= 0 && cx < cols && cy < rows;
+        this.registry.set('forgeCount', this.forges.getLength());
+        this.registry.set('barracksCount', this.barracks.getLength());
     }
 
     public destroy(): void {
@@ -567,13 +536,15 @@ export class BuildingManager {
         this.scene.input.off('gameout');
         this.scene.events.off(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
 
-        this.towers.destroy(true);
-        this.walls.destroy(true);
-        this.generators.destroy(true);
-        this.campfires.destroy(true);
-        this.forges.destroy(true);
-        this.storages.destroy(true);
-        this.barracks.destroy(true);
+        this.towers.clear(true, true);
+        this.walls.clear(true, true);
+        this.generators.clear(true, true);
+        this.campfires.clear(true, true);
+        this.forges.clear(true, true);
+        this.storages.clear(true, true);
+        this.barracks.clear(true, true);
+
+        this.buildings = [];
 
         this.previewGhost?.destroy();
         this.previewRangeGfx?.destroy();
