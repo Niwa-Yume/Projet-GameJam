@@ -1,3 +1,4 @@
+
 import Phaser from 'phaser';
 
 export class HealthComponent {
@@ -10,22 +11,16 @@ export class HealthComponent {
         this.maxHp = maxHp;
         this.hp = maxHp;
 
-        // Debug log: .id retiré pour éviter l'erreur TS
-        console.log(`HealthComponent créé pour ${gameObject.constructor.name} avec maxHp: ${maxHp}`);
-
         this.gameObject.setData('health', this);
     }
 
     public takeDamage(amount: number): void {
-        console.log(`GameObject prend ${amount} dégâts. PV actuels: ${this.hp}`);
+        if (!this.gameObject.active) return;
 
         this.hp = Math.max(0, this.hp - amount);
         this.gameObject.emit('health-changed', this.hp, this.maxHp);
 
-        console.log(`GameObject PV après dégâts: ${this.hp}`);
-
         if (this.hp === 0) {
-            console.log(`GameObject est mort !`);
             this.gameObject.emit('died');
             this.destroy();
         }
@@ -56,6 +51,10 @@ export class HealthComponent {
     }
 
     private destroy(): void {
+        // Check if the gameObject is still active and has a scene before destroying
+        if (this.gameObject.active && this.gameObject.scene) {
+            this.gameObject.destroy();
+        }
         this.gameObject.setData('health', null);
     }
 }

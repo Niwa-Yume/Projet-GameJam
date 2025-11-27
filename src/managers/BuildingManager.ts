@@ -1,3 +1,4 @@
+
 import Phaser from 'phaser';
 import { GameConstants } from '../scenes/GameConstants';
 import { PathfindingGrid } from '../scenes/PathfindingGrid';
@@ -495,6 +496,14 @@ export class BuildingManager {
             if (Phaser.Math.Distance.Between(x, y, go.x, go.y) <= GameConstants.ATTACK_RANGE) return go; // Return the container itself
         }
         return undefined;
+    }
+
+    public findBuildingInFront(enemy: EnemyGO): Phaser.GameObjects.Container | undefined {
+        const body = enemy.body as Phaser.Physics.Arcade.Body;
+        const forwardVector = body.velocity.clone().normalize();
+        const checkX = enemy.x + forwardVector.x * 16; // Check 16 pixels ahead
+        const checkY = enemy.y + forwardVector.y * 16;
+        return this.findBuildingAt(checkX, checkY);
     }
 
     public recomputeGrid(): void {

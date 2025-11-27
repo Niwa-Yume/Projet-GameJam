@@ -28,15 +28,20 @@ export class EnemyManager {
         const eList = this.enemies.getChildren() as EnemyGO[];
         for (const enemy of eList) {
             let target = enemy.getData('target') as Phaser.GameObjects.Container | undefined;
+            const body = enemy.body as Phaser.Physics.Arcade.Body;
 
-            if (!target || !target.active) {
-                target = this.buildingManager.findBuildingAt(enemy.x, enemy.y);
+            // Si l'ennemi est bloqué, il cherche une cible à attaquer
+            if (body.velocity.length() < 1 && (!target || !target.active)) {
+                target = this.buildingManager.findBuildingInFront(enemy);
                 if (target) {
                     enemy.setData('target', target);
-                    (enemy.body as Phaser.Physics.Arcade.Body)?.setVelocity(0, 0);
-                } else {
-                    this.followPathStep(enemy);
+                    body.setVelocity(0, 0);
                 }
+            }
+
+            if (!target || !target.active) {
+                enemy.setData('target', undefined);
+                this.followPathStep(enemy);
             }
 
             if (target && target.active) {
